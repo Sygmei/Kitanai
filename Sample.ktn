@@ -1,0 +1,3 @@
+print "Bienvenue sur le jeu du plus ou moins";[int (mul random 100)]>[int (input "Entrez un nombre : ")]>[6]>[False]
+#&2;?{eq $2[@] 0}{jump 3}?{eq $3[@] True}{&4}#?{eq $0[@] $1[@]}{$3[True];&~} {$3[False];$2[sb @ 1]?{gt $0[@] $1[@]}
+{print "C'est plus !"}{print "C'est moins !"};&~}#print "Looser";end#print (cat (cat "Winner en " $2[@]) " essais");end
