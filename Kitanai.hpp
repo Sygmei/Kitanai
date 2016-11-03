@@ -91,11 +91,13 @@ namespace TokenType
     {
         OpenInstruction,
         CloseInstruction,
+        Instruction,
         StaticString,
         StaticNumber,
         Condition,
         OpenStackAccess,
         CloseStackAccess,
+        StackAccess,
         Function,
         ContractStack,
         ExpandStack,
@@ -106,7 +108,8 @@ namespace TokenType
         Origin,
         NewInstruction,
         LeftParenthesis,
-        RightParenthesis
+        RightParenthesis,
+        Parenthesis
     };
 
     static std::map<std::string, std::pair<std::string, Type>> TypeDataK = {
@@ -144,7 +147,22 @@ namespace TokenType
         {RightParenthesis, {"RightParenthesis", ")"}},
         {Function, {"Function", ""}},
         {StaticString, {"StaticString", ""}},
-        {StaticNumber, {"StaticNumber", ""}}
+        {StaticNumber, {"StaticNumber", ""}},
+        {Instruction, {"Instruction", ""}},
+        {Parenthesis, {"Parenthesis", ""}},
+        {StackAccess, {"StackAccess", ""}},
+    };
+    static std::vector<std::vector<Type>> TypeParameters = {
+        {Goto, Origin},
+        {Goto, StaticNumber},
+        {StackAt, StaticNumber},
+        {Condition, Instruction, Instruction, Instruction},
+        {Condition, Instruction, Instruction}
+    };
+    static std::vector<std::vector<Type>> TypeCompression = {
+        {OpenInstruction, CloseInstruction, Instruction},
+        {OpenStackAccess, CloseStackAccess, StackAccess},
+        {LeftParenthesis, RightParenthesis, Parenthesis}
     };
     static std::map<std::string, std::pair<std::string, Type>, cmpByStringLength> TypeDataF = {
         {"print", {"print", Condition}}
@@ -156,18 +174,36 @@ class Token
     private:
         TokenType::Type type;
         std::string value;
+        std::vector<Token> parameters;
     public:
         Token(TokenType::Type type);
         Token(TokenType::Type type, std::string value);
         TokenType::Type getType();
+        void setType(TokenType::Type type);
         std::string getValue();
+        void addParameter(Token token);
+        std::vector<Token> getParameters();
+        void inspect(int depth = 0);
 };
 std::vector<Token> stringToTokens(std::string string);
+
+class InstructionBloc
+{
+    private:
+        std::vector<Token> instructions;
+    public:
+        InstructionBloc();
+        void addToken(Token token);
+        std::vector<Token>* getAllTokens();
+        void inspect(int depth = 0);
+};
+void inspectToken(Token& token);
+void inspectBloc(InstructionBloc& bloc);
 
 class Program
 {
     private:
-        std::vector<std::vector<Token>> instructions;
+        std::vector<InstructionBloc> instructions;
         std::map<std::string, int> flags;
         std::vector<std::string> origins;
         std::vector<Attribute*> stack;
