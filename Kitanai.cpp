@@ -12,23 +12,6 @@ std::vector<std::string> split(const std::string &str, const std::string &delimi
     }
     return tokens;
 }
-
-std::string join(std::vector<std::string>& vector, std::string sep, int start, int end)
-{
-    std::string result = "";
-    if (end >= vector.size())
-        end = vector.size();
-    if (start >= vector.size() - 1)
-        start = vector.size() - 1;
-    for (int i = start; i < vector.size() - end; i++) {
-        if (i != vector.size() - 1)
-            result += vector[i] + sep;
-        else
-            result += vector[i];
-    }
-    return result;
-}
-
 std::string replaceString(std::string subject, const std::string& search, const std::string &replace) {
     size_t pos = 0;
     while ((pos = subject.find(search, pos)) != std::string::npos) {
@@ -37,7 +20,6 @@ std::string replaceString(std::string subject, const std::string& search, const 
     }
     return subject;
 }
-
 ExtractionResult extractStrings(std::string string)
 {
     std::vector<std::string> strings;
@@ -72,12 +54,10 @@ ExtractionResult extractStrings(std::string string)
     std::tuple<std::vector<std::string>, std::vector<std::string>, std::vector<std::pair<int, int>>> result = std::make_tuple(strings, others, order);
     return result;
 }
-
 void removeCharFromString(std::string &str, std::string charToRemove)
 {
 	str.erase(remove(str.begin(), str.end(), charToRemove.c_str()[0]), str.end());
 }
-
 int occurencesInString(std::string str, std::string occur) 
 {
     int occurrences = 0;
@@ -88,7 +68,6 @@ int occurencesInString(std::string str, std::string occur)
     }
     return occurrences;
 }
-
 bool isStringInt(std::string str) 
 {
     if (str.size() > 0)
@@ -121,7 +100,6 @@ bool isStringNumeric(std::string str)
 {
     return (isStringFloat(str) || isStringInt(str));
 }
-
 std::vector<Token> stringToTokens(int& flagCounter, std::string string)
 {
     std::vector<Token> allTokens;
@@ -152,7 +130,7 @@ std::vector<Token> stringToTokens(int& flagCounter, std::string string)
                         othStack = "";
                     }
                     if (it.second.second == TokenType::Flag) {
-                        allTokens.push_back(Token(it.second.second, std::to_string(flagCounter++)));
+                        allTokens.push_back(Token(it.second.second, std::to_string(++flagCounter)));
                     }
                     else {
                         allTokens.push_back(Token(it.second.second));
@@ -187,6 +165,10 @@ int main(int argc, char** argv)
 {
     std::cout << "NoNameLang v0.0.1" << std::endl;
 
+    std::ofstream out("log.txt");
+    std::streambuf *coutbuf = std::cout.rdbuf();
+    std::cout.rdbuf(out.rdbuf());
+
     if (argc == 3 && argv[1] == std::string("-f"))
     {
         std::string currentFile = std::string(argv[2]);
@@ -200,14 +182,33 @@ int main(int argc, char** argv)
 }
 
 //Token
+int Token::TokenAmount = 0;
 Token::Token(TokenType::Type type)
 {
     this->type = type;
+    this->id = TokenAmount++;
 }
 Token::Token(TokenType::Type type, std::string value)
 {
     this->type = type;
     this->value = value;
+    this->id = TokenAmount++;
+}
+void Token::setParent(Token* parent)
+{
+    std::cout << getSummary() << " now have parent : " << parent->getSummary() << std::endl;
+    this->parent = parent;
+    this->parentID = this->parent->getID();
+}
+int Token::getID()
+{
+    return this->id;
+}
+std::string Token::getSummary()
+{
+    std::ostringstream address;
+    address << (void const *)this;
+    return "[<" + std::to_string(id) + "> " + this->getPrintableType() + ((this->getValue() != "") ? " (" + this->value + ")" : "") + std::string(" @") + address.str() + "]";
 }
 TokenType::Type Token::getType() 
 {
@@ -225,40 +226,203 @@ std::string Token::getValue()
 {
     return this->value;
 }
-void Token::addParameter(Token* token)
+void Token::addParameter(Token token)
 {
+    token.setParent(this);
     this->parameters.push_back(token);
 }
-std::vector<Token*>* Token::getParameters()
+std::vector<Token>* Token::getParameters()
 {
     return &parameters;
+}
+bool Token::operator==(Token& other)
+{
+    return (this->getType() == other.getType() && this->getValue() == other.getValue());
+}
+void Token::insertAfter(int id, Token token)
+{
+    for (int i = 0; i < parameters.size(); i++) {
+        if (parameters[i].getID() == id) {
+            token.setParent(this);
+            parameters.insert(parameters.begin() + i + 1, token);
+            break;
+        }
+    }
+}
+Token* Token::getParent()
+{
+    return this->parent;
+}
+int Token::getParentID()
+{
+    return this->parentID;
 }
 void Token::inspect(int depth)
 {
     for (int i = 0; i < depth; i++) std::cout << "    ";
-    std::cout << "- Token : " << TokenType::TypeDataR[type].first << ((value != "") ? "(" + value + ")" : "") << std::endl;
-    for (Token* childToken : parameters) {
-        childToken->inspect(depth + 1);
+    std::cout << getSummary() << std::endl;
+    for (Token childToken : parameters) {
+        childToken.inspect(depth + 1);
     }
 }
 void Token::execute(Program* prg)
 {
-    for (Token* tok : parameters) {
-        tok->execute(prg);
-    }
-    std::cout << "Execute Token : " << getPrintableType() << " : " << getValue() << std::endl;
-    if (getType() == TokenType::Function) {
-        StdLib::FunctionsName[getValue()].first(*getParameters());
-    }
-    else if (getType() == TokenType::StackAt) {
-        if (parameters[0]->getType() == TokenType::String) {
-            prg->setStackPosition(parameters[0]->getValue());
-        }
-        else if (parameters[0]->getType() == TokenType::String) {
-            prg->setStackPosition(std::stoi(parameters[0]->getValue()));
+    //std::cout << "Execute Token : " << getSummary() << std::endl;
+    std::vector<Token> parametersExecution = parameters;
+    if (getType() != TokenType::Condition) {
+        for (Token& tok : parametersExecution) {
+            tok.execute(prg);
         }
     }
-    std::cin.get();
+    else {
+        parametersExecution[0].execute(prg);
+    }
+    if (prg->canExecute()) {
+        if (getType() == TokenType::Function) {
+            std::cout << "[Exe::Function] Call function : " << getValue() << std::endl;
+            Token returnValue = StdLib::FunctionsName[getValue()].first(parametersExecution);
+            std::cout << "[Exe::Function] " << getValue() << " returned : " << returnValue.getSummary() << std::endl;
+            this->type = returnValue.getType();
+            this->value = returnValue.getValue();
+        }
+        else if (getType() == TokenType::StackAt) {
+            if (getInstructionContent(parametersExecution).getType() == TokenType::String) {
+                prg->setStackPosition(getInstructionContent(parametersExecution).getValue());
+            }
+            else if (getInstructionContent(parametersExecution).getType() == TokenType::String) {
+                prg->setStackPosition(std::stoi(getInstructionContent(parametersExecution).getValue()));
+            }
+            this->type = TokenType::Null;
+            this->value = "";
+        }
+        else if (getType() == TokenType::Condition) {
+            Token condition = getInstructionContent(parametersExecution);
+            if (condition.getType() == TokenType::Number && condition.getValue() == "1") {
+                std::cout << "[Exe::Condition] : Condition is fulfilled (First Branch)" << std::endl;
+                parametersExecution[1].execute(prg);
+            }
+            else {
+                std::cout << "[Exe::Condition] : Condition not fulfilled";
+                if (parametersExecution.size() > 2) {
+                    std::cout << " (Second Branch)";
+                    parametersExecution[2].execute(prg);
+                }
+                std::cout << std::endl;
+            }
+        }
+        else if (getType() == TokenType::CurrentStackValue) {
+            Token valueAt = prg->getStackAt();
+            this->type = valueAt.getType();
+            this->value = valueAt.getValue();
+            std::cout << "[Exe:CurrentStackValue] : Returns current StackValue : " << getSummary() << std::endl;
+        }
+        else if (getType() == TokenType::StackAccess) {
+            std::cout << "[Exe:StackAccess] : Store value : " << getInstructionContent(parametersExecution).getSummary() << " at $" << prg->getStackIndex() << std::endl;
+            prg->storeInStack(getInstructionContent(parametersExecution));
+        }
+        else if (getType() == TokenType::Instruction) {
+            this->type = getInstructionContent(parametersExecution).getType();
+            this->value = getInstructionContent(parametersExecution).getValue();
+        }
+        else if (getType() == TokenType::Goto) {
+            Token jumpDest = getInstructionContent(parametersExecution);
+            if (jumpDest.getType() == TokenType::Origin) {
+                prg->setSeekedFlag(prg->getNextOrigin());
+                std::cout << "[Exe:Goto] : Goto Origin : " << prg->getNextOrigin() << std::endl;
+            }
+            else {
+                std::cout << "[Exe:Goto] : Goto flag : " << getInstructionContent(parametersExecution).getValue() << std::endl;
+                std::cout << "[Exe::Goto] : Add Origin Marker : " << getInstructionContent(parametersExecution, 1).getValue() << std::endl;
+                prg->addOrigin(std::stoi(getInstructionContent(parametersExecution, 1).getValue()));
+                prg->setSeekedFlag(std::stoi(getInstructionContent(parametersExecution).getValue()));
+            }
+            prg->stopExecution();            
+        }
+        //std::cin.get();
+    }
+    else if (TokenType::Flag == this->getType() && prg->getSeekedFlag() == std::stoi(this->getValue())) {
+        std::cout << "[Exe:Flag] Flag found : Restarting execution" << std::endl;
+        prg->startExecution();
+    }
+    else if (TokenType::DynamicFlag == this->getType() && prg->getSeekedFlag() == std::stoi(this->getValue())) {
+        std::cout << "[Exe:Flag] Origin found : Restarting execution" << std::endl;
+        prg->startExecution();
+        prg->removeOriginFlag(*this);
+    }
+}
+Token Token::getInstructionContent(std::vector<Token>& tokens, int index)
+{
+    int cIndex = 0;
+    for (Token token : tokens) {
+        if (token.getType() != TokenType::Null && cIndex == index) {
+            return token;
+        }
+        else if (token.getType() != TokenType::Null) {
+            cIndex++;
+        }
+    }
+    return Token(TokenType::Null);
+}
+void Token::explore(std::vector<Token*>& list)
+{
+    list.push_back(this);
+    std::cout << "Pushing : " << this->getSummary() << " to Crawler" << std::endl;
+    for (Token& childToken : parameters) {
+        childToken.explore(list);
+    }
+}
+Token* Token::getAtID(int id)
+{
+    if (this->id == id) {
+        return this;
+    }
+    else
+    {
+        for (Token& childToken : parameters) {
+            if (childToken.getAtID(id) != nullptr) {
+                return childToken.getAtID(id);
+            }
+        }
+        return nullptr;
+    }
+}
+
+//TokenCrawler
+TokenCrawler::TokenCrawler(Token& tokens, Token* iterator)
+{
+    this->iterator = iterator;
+    tokens.explore(tokenVector);
+    index = 0;
+}
+void TokenCrawler::reset()
+{
+    index = 0;
+}
+bool TokenCrawler::hasNext()
+{
+    return tokenVector.size() > index;
+}
+Token* TokenCrawler::get()
+{
+    return tokenVector[index];
+}
+Token* TokenCrawler::getAtOffset(int offset)
+{
+    return tokenVector[index + offset];
+}
+bool TokenCrawler::next()
+{
+    if (index >= tokenVector.size()) {
+        return false;
+    }
+    else {
+        *this->iterator = *tokenVector[index++];
+        return true;
+    }
+}
+std::vector<Token*> TokenCrawler::getList()
+{
+    return tokenVector;
 }
 
 
@@ -266,6 +430,45 @@ void Token::execute(Program* prg)
 Program::Program()
 {
 
+}
+void Program::addOrigin(int flagNumber)
+{
+    origins.push_back(flagNumber);
+}
+int Program::getNextOrigin()
+{
+    return origins.back();
+}
+void Program::removeOriginFlag(Token& flag)
+{
+    if (flag.getType() == TokenType::DynamicFlag && std::stoi(flag.getValue()) == origins.back()) {
+        origins.pop_back();
+        flag = Token(TokenType::Null);
+    }
+    else
+    {
+        std::cout << "Pas bon :(" << std::endl;
+    }
+}
+void Program::stopExecution()
+{
+    execution = false;
+}
+void Program::startExecution()
+{
+    execution = true;
+}
+bool Program::canExecute()
+{
+    return execution;
+}
+void Program::setSeekedFlag(int flag)
+{
+    flagSeeked = flag;
+}
+int Program::getSeekedFlag()
+{
+    return flagSeeked;
 }
 void Program::setStackPosition(std::string pos)
 {
@@ -277,9 +480,16 @@ void Program::setStackPosition(int pos)
     std::cout << "[Exe] SubStackPosition switched to : " << pos << std::endl;
     subStackPosition = pos;
 }
-Token* Program::getStackAt()
+Token Program::getStackAt()
 {
     return stack[stackPosition][subStackPosition];
+}
+void Program::storeInStack(Token token)
+{
+    while (stack[stackPosition].size() <= subStackPosition) {
+        stack[stackPosition].push_back(Token(TokenType::Null));
+    }
+    stack[stackPosition][subStackPosition] = token;
 }
 void Program::parseFile(std::string path)
 {
@@ -287,7 +497,6 @@ void Program::parseFile(std::string path)
     useFile.open(path);
     std::string currentLine;
     std::vector<Token> instructionBuffer;
-    int flagCounter = 0;
     if (useFile.is_open()) {
         std::cout << "Start Parsing File : " << path << std::endl;
         while (getline(useFile, currentLine)) {
@@ -300,7 +509,9 @@ void Program::parseFile(std::string path)
                 }
                 for (std::pair<int, int> parseInst : std::get<2>(cuttedString)) {
                     if (parseInst.first == 0) {
-                        instructionBuffer.push_back(Token(TokenType::String, std::get<0>(cuttedString)[parseInst.second]));
+                        Token newToken(TokenType::String, std::get<0>(cuttedString)[parseInst.second]);
+                        newToken.setParent(&instructions);
+                        instructionBuffer.push_back(newToken);
                     }
                     else if (parseInst.first == 1) {
                         std::vector<Token> tokensFromCInst = stringToTokens(flagCounter, std::get<1>(cuttedString)[parseInst.second]);
@@ -313,126 +524,152 @@ void Program::parseFile(std::string path)
     std::cout << "Buffering..." << std::endl;
     int currentInstructionIndex = 0;
     for (Token tok : instructionBuffer) {
-        instructions.addParameter(new Token(tok));
+        instructions.addParameter(tok);
     }
 
-    for (Token* inst : *instructions.getParameters()) {
-        bool blocChange = true;
-        std::cout << "Beginning instruction" << std::endl;
-        std::vector<Token*> compressionStack;
-        bool compressionStackOpened = false;
-        int compressionStackIndex = 0;
-        int stackType;
-        while (blocChange) {
-            //std::cout << "Bloc changed, restart" << std::endl;
-            blocChange = false;
-            int instIndex = 0;
-            while (instIndex < inst->getParameters()->size()) {
-                Token* tok = inst->getParameters()->at(instIndex);
-                std::cout << "Current Token : " << TokenType::TypeDataR[tok->getType()].first << std::endl;
-                for (int it = 0; it < TokenType::TypeParameters.size(); it++) { //Type Parameters
-                    if (tok->getType() == TokenType::TypeParameters[it][0] && instIndex + TokenType::TypeParameters[it].size() - 1 < inst->getParameters()->size()) {
-                        //std::cout << "    @Type Parameters Inspection " << TokenType::TypeDataR[tok->getType()].first << std::endl;
-                        int pindex = 1;
-                        bool noAdd = true;
-                        std::vector<Token*> toAdd;
-                        //std::cout << "VecSize " << TokenType::TypeParameters[it].size() << std::endl;
-                        //std::cout << "InsVecSize " << inst.getAllTokens()->size() << "/" << instIndex << std::endl;
-                        //std::cout << "Current Elem : " << TokenType::TypeDataR[inst.getAllTokens()->at(instIndex).getType()].first << " @" << instIndex << std::endl;
-                        for (int iPara = 1; iPara < TokenType::TypeParameters[it].size(); iPara++) {
-                            //std::cout << "Current iPara : " << iPara << std::endl;
-                            //std::cout << "Current ndIndex " << instIndex + pindex << std::endl;
-                            //std::cout << "        Expect : " << TokenType::TypeDataR[TokenType::TypeParameters[it][iPara]].first << std::endl;
-                            //std::cout << "        Got : " << TokenType::TypeDataR[inst.getAllTokens()->at(instIndex + pindex).getType()].first << std::endl;
-                            if (TokenType::TypeParameters[it][iPara] == inst->getParameters()->at(instIndex + pindex)->getType()) {
-                                //std::cout << "        Add Parameter : " << TokenType::TypeDataR[inst.getAllTokens()->at(instIndex + pindex).getType()].first << std::endl;
-                                noAdd = false;
-                                toAdd.push_back(inst->getParameters()->at(instIndex + pindex));
-                                pindex++;
-                            }
-                            else {
-                                noAdd = true;
-                                break;
-                            }
+    bool blocChange = true;
+    std::cout << "Beginning instruction" << std::endl;
+    std::vector<Token> compressionStack;
+    bool compressionStackOpened = false;
+    int compressionStackIndex = 0;
+    int stackType;
+    while (blocChange) {
+        std::cout << "Bloc changed, restart" << std::endl;
+        blocChange = false;
+        int instIndex = 0;
+        std::cout << "Bloc size : " << instructions.getParameters()->size() << std::endl;
+        while (instIndex < instructions.getParameters()->size()) {
+            Token& tok = instructions.getParameters()->at(instIndex);
+            std::cout << "Current Token : " << tok.getSummary() << std::endl;
+            for (int it = 0; it < TokenType::TypeParameters.size(); it++) { //Type Parameters
+                if (tok.getType() == TokenType::TypeParameters[it][0] && instIndex + TokenType::TypeParameters[it].size() - 1 < instructions.getParameters()->size()) {
+                    std::cout << "    @Type Parameters Inspection " << TokenType::TypeDataR[tok.getType()].first << std::endl;
+                    int pindex = 1;
+                    bool noAdd = true;
+                    std::vector<Token> toAdd;
+                    std::cout << "VecSize " << TokenType::TypeParameters[it].size() << std::endl;
+                    std::cout << "InsVecSize " << instructions.getParameters()->size() << "/" << instIndex << std::endl;
+                    std::cout << "Current Elem : " << TokenType::TypeDataR[instructions.getParameters()->at(instIndex).getType()].first << " @" << instIndex << std::endl;
+                    for (int iPara = 1; iPara < TokenType::TypeParameters[it].size(); iPara++) {
+                        std::cout << "Current iPara : " << iPara << std::endl;
+                        std::cout << "Current ndIndex " << instIndex + pindex << std::endl;
+                        std::cout << "        Expect : " << TokenType::TypeDataR[TokenType::TypeParameters[it][iPara]].first << std::endl;
+                        std::cout << "        Got : " << TokenType::TypeDataR[instructions.getParameters()->at(instIndex + pindex).getType()].first << std::endl;
+                        if (TokenType::TypeParameters[it][iPara] == instructions.getParameters()->at(instIndex + pindex).getType()) {
+                            std::cout << "        Add Parameter : " << TokenType::TypeDataR[instructions.getParameters()->at(instIndex + pindex).getType()].first << std::endl;
+                            noAdd = false;
+                            toAdd.push_back(instructions.getParameters()->at(instIndex + pindex));
+                            pindex++;
                         }
-                        //std::cout << "EOL" << std::endl;
-                        if (!noAdd) {
-                            for (int i = 0; i < toAdd.size(); i++) {
-                                //std::cout << "ADD : " << TokenType::TypeDataR[toAdd[i].getType()].first << std::endl; 
-                                tok->addParameter(toAdd[i]);
-                            }
-                            inst->getParameters()->erase(inst->getParameters()->begin() + instIndex + 1, inst->getParameters()->begin() + instIndex + toAdd.size() + 1);
-                            //std::cout << "BLOC CHANGED !" << std::endl;
-                            blocChange = true;
+                        else {
+                            noAdd = true;
+                            break;
                         }
                     }
-                }
-                if (compressionStackOpened) {
-                    compressionStack.push_back(tok);
-                }
-                if (!blocChange) {
-                    for (int i = 0; i < TokenType::TypeCompression.size(); i++) { //Type compression 
-                        if (tok->getType() == TokenType::TypeCompression[i][0]) {
-                            std::cout << "    Stack opened for : " << TokenType::TypeDataR[tok->getType()].first << std::endl;
-                            compressionStackOpened = true;
-                            compressionStackIndex = instIndex;
-                            compressionStack.clear();
-                            stackType = i;
+                    std::cout << "EOL" << std::endl;
+                    if (!noAdd) {
+                        for (int i = 0; i < toAdd.size(); i++) {
+                            std::cout << "ADD : " << TokenType::TypeDataR[toAdd[i].getType()].first << std::endl; 
+                            tok.addParameter(toAdd[i]);
                         }
-                        if (tok->getType() == TokenType::TypeCompression[i][1] && i == stackType) {
-                            compressionStack.pop_back();
-                            (*inst->getParameters())[instIndex] = new Token(TokenType::TypeCompression[i][2]);
-                            tok = inst->getParameters()->at(instIndex);
-                            for (Token* cstok : compressionStack) {
-                                std::cout << "      Add : " << TokenType::TypeDataR[cstok->getType()].first << std::endl;
-                                tok->addParameter(new Token(*cstok));
-                            }
-                            std::cout << "    Stack closed for : " << TokenType::TypeDataR[tok->getType()].first << std::endl;
-                            inst->getParameters()->erase(inst->getParameters()->begin() + compressionStackIndex, inst->getParameters()->begin() + instIndex);
-                            compressionStackOpened = false;
-                            compressionStackIndex = 0;
-                            compressionStack.clear();
-                            blocChange = true;
-                            stackType = 0;
-                        }
-                        else if (tok->getType() == TokenType::TypeCompression[i][1] && i != stackType) {
-                            std::cout << "ERROR STACK CROSSING : " << std::endl;
-                        }
+                        instructions.getParameters()->erase(instructions.getParameters()->begin() + instIndex + 1, instructions.getParameters()->begin() + instIndex + toAdd.size() + 1);
+                        std::cout << "BLOC CHANGED !" << std::endl;
+                        blocChange = true;
                     }
                 }
-                else {
-                    compressionStackOpened = false;
-                    compressionStack.clear();
-                    compressionStackIndex = 0;
-                }
-                instIndex++;
             }
+            if (compressionStackOpened) {
+                compressionStack.push_back(tok);
+            }
+            if (!blocChange) {
+                for (int i = 0; i < TokenType::TypeCompression.size(); i++) { //Type compression 
+                    if (tok.getType() == TokenType::TypeCompression[i][0]) {
+                        std::cout << "    Stack opened for : " << TokenType::TypeDataR[tok.getType()].first << std::endl;
+                        compressionStackOpened = true;
+                        compressionStackIndex = instIndex;
+                        compressionStack.clear();
+                        stackType = i;
+                    }
+                    if (tok.getType() == TokenType::TypeCompression[i][1] && i == stackType) {
+                        compressionStack.pop_back();
+                        Token newToken(TokenType::TypeCompression[i][2]);
+                        newToken.setParent(&instructions);
+                        (*instructions.getParameters())[instIndex] = newToken;
+                        tok = instructions.getParameters()->at(instIndex);
+                        for (Token cstok : compressionStack) {
+                            std::cout << "      Add : " << TokenType::TypeDataR[cstok.getType()].first << std::endl;
+                            tok.addParameter(cstok);
+                        }
+                        std::cout << "    Stack closed for : " << TokenType::TypeDataR[tok.getType()].first << std::endl;
+                        instructions.getParameters()->erase(instructions.getParameters()->begin() + compressionStackIndex, instructions.getParameters()->begin() + instIndex);
+                        compressionStackOpened = false;
+                        compressionStackIndex = 0;
+                        compressionStack.clear();
+                        blocChange = true;
+                        stackType = 0;
+                    }
+                    else if (tok.getType() == TokenType::TypeCompression[i][1] && i != stackType) {
+                        std::cout << "ERROR STACK CROSSING : " << std::endl;
+                    }
+                }
+            }
+            else {
+                compressionStackOpened = false;
+                compressionStack.clear();
+                compressionStackIndex = 0;
+            }
+            instIndex++;
         }
     }
     //Function Imbrication
-    for (Token* ins : *instructions.getParameters()) {
-        parametersAffectation(ins->getParameters());
+    parametersAffectation(instructions.getParameters());
+
+    //Dynamic Flag
+    Token tok(TokenType::Null);
+    TokenCrawler tkCrawler(instructions, &tok);
+    instructions.inspect();
+    std::vector<Token*> allTok = tkCrawler.getList();
+    for (int i = 0; i < allTok.size(); i++) {
+        Token* tok = allTok[i];
+        std::cout << "@@@ " << tok->getSummary() << std::endl;
+        if (tok->getType() == TokenType::Goto) {
+            std::cout << "!!! " << tok->getID() << " is GOTO" << std::endl;
+            if (i != allTok.size() - 1) {
+                std::cout << "!!! " << tok->getID() << " has next" << std::endl;
+                std::cout << "Next type : " << allTok[i + 1]->getSummary() << std::endl;
+                bool meh = (allTok[i + 1]->getType() == TokenType::Number);
+                std::cout << "Is equal : " << meh << std::endl;
+                
+                if (allTok[i + 1]->getType() == TokenType::Number) { //INSERTION CAUSE DIS PROBLEM OF DECALAGE
+                    std::cout << "!!! " << tok->getID() << " has number" << std::endl;
+                    std::cout << "[AddDynamicFlag] : " << tok->getID() << " with ParentID : " << tok->getParentID() << std::endl;
+                    instructions.getAtID(tok->getParentID())->insertAfter(tok->getID(), Token(TokenType::DynamicFlag, std::to_string(++flagCounter)));
+                    tok->addParameter(Token(TokenType::Number, std::to_string(flagCounter)));
+                }
+            }
+        }
     }
+    instructions.inspect();
 }
-void parametersAffectation(std::vector<Token*>* tokens)
+void parametersAffectation(std::vector<Token>* tokens)
 {
     for (int i = 0; i < tokens->size(); i++) {
-        Token* tok = tokens->at(i);
-        parametersAffectation(tok->getParameters());
-        std::cout << tok->getPrintableType() << " // " << tok->getValue() << std::endl;
-        if (tok->getType() == TokenType::Function) {
+        Token& tok = tokens->at(i);
+        parametersAffectation(tok.getParameters());
+        std::cout << tok.getSummary() << std::endl;
+        if (tok.getType() == TokenType::Function) {
             std::cout << "Type Func" << std::endl;
             std::vector<int> indexToErase;
-            for (int j = i + 1; j < StdLib::FunctionsName[tok->getValue()].second + i + 1; j++) {
-                std::cout << "[ADDING PARAMETER] : " << tokens->at(j)->getPrintableType() << std::endl;
-                tok->addParameter(tokens->at(j));
-                parametersAffectation(tokens->at(j)->getParameters());
+            for (int j = i + 1; j < StdLib::FunctionsName[tok.getValue()].second + i + 1; j++) {
+                std::cout << "[ADDING PARAMETER] : " << tokens->at(j).getPrintableType() << std::endl;
+                parametersAffectation(tokens->at(j).getParameters());
+                tok.addParameter(tokens->at(j));
                 indexToErase.push_back(j);
                 std::cout << "Closure" << std::endl;
             }
             std::reverse(indexToErase.begin(), indexToErase.end());
             for (int j = 0; j < indexToErase.size(); j++) {
-                std::cout << "Er:/" << indexToErase[j] << "oOf+" << tokens->size() << "?" << j << std::endl;
+                std::cout << "Erase : " << indexToErase[j] << " of size" << tokens->size() << "?" << j << std::endl;
                 tokens->erase(tokens->begin() + indexToErase[j]);
             }
         }
@@ -440,10 +677,12 @@ void parametersAffectation(std::vector<Token*>* tokens)
 }
 void Program::exec()
 {
-    for (Token* ins : *instructions.getParameters()) {
-        ins->inspect();
+    instructions.inspect();
+    while (!isProgramOver) {
+        instructions.execute(this);
     }
-    for (Token* ins : *instructions.getParameters()) {
-        ins->execute(this);
-    }
+}
+std::string Program::getStackIndex()
+{
+    return stackPosition;
 }
