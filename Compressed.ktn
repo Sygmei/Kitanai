@@ -1,0 +1,4 @@
+print "Bienvenue sur le jeu du plus ou moins"$"secretNumber"[int(mul random 100)]$"try"[6]$"numberFound"
+[0]#$"userInput"[int(input"Entrez un nombre : ")]&2?(eq ($"try"@) 0)(&3)?(eq ($"numberFound"@) 1)(&4)&1#?
+(eq($"secretNumber"@)($"userInput"@))($"numberFound"[1]&~)($"try"[sub @ 1]?(gt($"secretNumber"@)($"userInput"@))
+(print"C'est plus !")(print"C'est moins !")&~)#print"Looser"%#print(add(add"Winner en "(string($"try"@)))" essais")%
