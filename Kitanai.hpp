@@ -47,9 +47,11 @@ namespace TokenType
         Flag,
         DynamicFlag,
         Goto,
+        GotoNoOrigin,
         Origin,
         NewInstruction,
         End,
+        ToggleExecution,
         Null
     };
 
@@ -63,8 +65,10 @@ namespace TokenType
         {"@", {"CurrentStackValue", CurrentStackValue}},
         {"#", {"Flag", Flag}},
         {"&", {"Goto", Goto}},
+        {"*", {"GotoNoOrigin", GotoNoOrigin}},
         {"~", {"Origin", Origin}},
         {";", {"NewInstruction", NewInstruction}},
+        {"!", {"ToggleExecution", ToggleExecution}},
         {"%", {"End", End}}
     };
     static std::map<Type, std::pair<std::string, std::string>> TypeDataR = {
@@ -78,9 +82,11 @@ namespace TokenType
         {Flag, {"Flag", "#"}},
         {DynamicFlag, {"DynamicFlag", ""}},
         {Goto, {"Goto", "&"}},
+        {GotoNoOrigin, {"GotoNoOrigin", "-&"}},
         {Origin, {"Origin", "~"}},
         {NewInstruction, {"NewInstruction", ";"}},
         {End, {"End", "%"}},
+        {ToggleExecution, {"ToggleExecution", "!"}},
         {Function, {"Function", ""}},
         {String, {"String", ""}},
         {Number, {"Number", ""}},
@@ -91,6 +97,7 @@ namespace TokenType
     static std::vector<std::vector<Type>> TypeParameters = {
         {Goto, Origin},
         {Goto, Number},
+        {GotoNoOrigin, Number},
         {StackAt, String},
         {StackAt, Number},
         {Condition, Instruction, Instruction, Instruction},
@@ -113,7 +120,7 @@ class Token
         TokenType::Type type;
         std::string value;
         std::vector<Token> parameters;
-        void explore(std::vector<Token*>& list);
+        void explore(std::vector<Token*>& list, int depth = -1);
         friend class TokenCrawler;
     public:
         Token(TokenType::Type type);
@@ -129,12 +136,17 @@ class Token
         std::string getValue();
         void addParameter(Token token);
         std::vector<Token>* getParameters();
+        void eraseTokenAtID(int id);
         void inspect(int depth = 0);
         void execute(Program* prg);
         Token getInstructionContent(std::vector<Token>& tokens, int index = 0);
         Token* getParent();
         void insertAfter(int id, Token token);
         bool operator==(Token& other);
+        int getDepth();
+        void doSemantics();
+        void doParametersAffectation();
+        void doDynamicFlags(int& flagCounter);
 };
 
 class TokenCrawler 
@@ -145,6 +157,7 @@ class TokenCrawler
         int index = 0;
     public:
         TokenCrawler(Token& tokens, Token* iterator);
+        void refresh(Token& tokens, int depth = -1);
         void reset();
         bool next();
         bool hasNext();
@@ -163,8 +176,9 @@ namespace StdLib
         Token b = tokens[1];
         if (a.getType() == TokenType::Number && b.getType() == TokenType::Number)
             return Token(TokenType::Number, std::to_string(std::stoi(a.getValue()) + std::stoi(b.getValue())));
-        if (a.getType() == TokenType::String && b.getType() == TokenType::String)
+        else {
             return Token(TokenType::String, a.getValue() + b.getValue());
+        }
     }
     Token f_sub(const std::vector<Token> tokens) {
         Token a = tokens[0];
@@ -175,7 +189,6 @@ namespace StdLib
     Token f_mul(const std::vector<Token> tokens) {
         Token a = tokens[0];
         Token b = tokens[1];
-        std::cout << "Multiply : " << a.getValue() << "*" << b.getValue() << std::endl;
         if (a.getType() == TokenType::Number && b.getType() == TokenType::Number)
             return Token(TokenType::Number, std::to_string(std::stod(a.getValue()) * std::stod(b.getValue())));
     }
@@ -227,12 +240,12 @@ namespace StdLib
     }
     Token f_print(const std::vector<Token> tokens) {
         Token a = tokens[0];
-        std::cout << "[Exe::print] " << a.getValue() << std::endl;
+        std::cout << a.getValue() << std::endl;
         return Token(TokenType::Null);
     }
     Token f_input(const std::vector<Token> tokens) {
         Token a = tokens[0];
-        std::cout << "[Exe::input] " << a.getValue();
+        std::cout << a.getValue();
         std::string userInput;
         std::getline(std::cin, userInput);
         return Token(TokenType::String, userInput);
@@ -288,6 +301,7 @@ class Program
 {
     private:
         Token instructions = Token(TokenType::Instruction);
+        TokenType::Type pauseCause = TokenType::Null;
         int flagCounter = 0;
         int flagSeeked = -1;
         bool isProgramOver = false;
@@ -295,20 +309,21 @@ class Program
         std::vector<int> origins;
         std::map<std::string, std::vector<Token>> stack;
         std::vector<std::string> staticStrings;
-        std::string stackPosition = "";
-        int subStackPosition = 0;
+        std::vector<std::pair<std::string, int>> stackPosition;
         int linePosition;
     public:
         Program();
         void parseFile(std::string path);
         void exec();
-        void setStackPosition(std::string pos);
-        void setStackPosition(int pos);
-        Token getStackAt();
-        void storeInStack(Token token);
-        void stopExecution();
+        void setStackPosition(int depth, std::string pos);
+        void setStackPosition(int depth, int pos);
+        Token getStackAt(int depth);
+        void storeInStack(int depth, Token token);
+        void stopExecution(TokenType::Type cause);
         void startExecution();
+        void stopProgram();
         bool canExecute();
+        TokenType::Type getPauseCause();
         void setSeekedFlag(int flag);
         int getSeekedFlag();
         void addOrigin(int flagNumber);
