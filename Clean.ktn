@@ -4,7 +4,7 @@ $"try" [6]
 $"numberFound" [0]
 
 #
-    $"userInput" [int(input "Entrez un nombre : ")]
+    $"userInput" [int(input(add(add "Entrez un nombre (" ($"try"@)) " essais) : "$"userInput"))]
     &2
     ?(eq ($"try"@) 0) (
         &3
@@ -30,5 +30,5 @@ $"numberFound" [0]
     print "Looser"
     %
 #
-    print(add(add "Winner en " (string($"try"@))) " essais")
+    print(add(add "Winner en " (sub 6 ($"try"@))) " essais")
 %
