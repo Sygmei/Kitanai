@@ -165,13 +165,20 @@ int main(int argc, char** argv)
 {
     std::cout << "NoNameLang v0.0.1" << std::endl;
 
-    std::ofstream out("log.txt");
+    /*std::ofstream out("log.txt");
     std::streambuf *coutbuf = std::cout.rdbuf();
-    std::cout.rdbuf(out.rdbuf());
+    std::cout.rdbuf(out.rdbuf());*/
 
     if (argc == 3 && argv[1] == std::string("-f"))
     {
         std::string currentFile = std::string(argv[2]);
+        std::cout << "Current file : " << currentFile << std::endl;
+        Program prog;
+        prog.parseFile(currentFile);
+        prog.exec();
+    }
+    else if (argc == 2) {
+        std::string currentFile = std::string(argv[1]);
         std::cout << "Current file : " << currentFile << std::endl;
         Program prog;
         prog.parseFile(currentFile);
@@ -267,7 +274,6 @@ void Token::inspect(int depth)
 }
 void Token::execute(Program* prg)
 {
-    //std::cout << "Execute Token : " << getSummary() << std::endl;
     std::vector<Token> parametersExecution = parameters;
     if (getType() != TokenType::Condition) {
         for (Token& tok : parametersExecution) {
@@ -278,47 +284,48 @@ void Token::execute(Program* prg)
         parametersExecution[0].execute(prg);
     }
     if (prg->canExecute()) {
+        //std::cout << "Execute Token : " << getSummary() << std::endl;
         if (getType() == TokenType::Function) {
-            std::cout << "[Exe::Function] Call function : " << getValue() << std::endl;
+            //std::cout << "[Exe::Function] Call function : " << getValue() << std::endl;
             Token returnValue = StdLib::FunctionsName[getValue()].first(parametersExecution);
-            std::cout << "[Exe::Function] " << getValue() << " returned : " << returnValue.getSummary() << std::endl;
+            //std::cout << "[Exe::Function] " << getValue() << " returned : " << returnValue.getSummary() << std::endl;
             this->type = returnValue.getType();
             this->value = returnValue.getValue();
         }
         else if (getType() == TokenType::StackAt) {
             if (getInstructionContent(parametersExecution).getType() == TokenType::String) {
-                prg->setStackPosition(getInstructionContent(parametersExecution).getValue());
+                prg->setStackPosition(getDepth(), getInstructionContent(parametersExecution).getValue());
             }
             else if (getInstructionContent(parametersExecution).getType() == TokenType::String) {
-                prg->setStackPosition(std::stoi(getInstructionContent(parametersExecution).getValue()));
+                prg->setStackPosition(getDepth(), std::stoi(getInstructionContent(parametersExecution).getValue()));
             }
             this->type = TokenType::Null;
             this->value = "";
         }
         else if (getType() == TokenType::Condition) {
             Token condition = getInstructionContent(parametersExecution);
+            //std::cout << "[Exe:Condition] : Condition result : " << condition.getSummary() << std::endl;
             if (condition.getType() == TokenType::Number && condition.getValue() == "1") {
-                std::cout << "[Exe::Condition] : Condition is fulfilled (First Branch)" << std::endl;
+                //std::cout << "[Exe::Condition] : Condition is fulfilled (First Branch)" << std::endl;
                 parametersExecution[1].execute(prg);
             }
-            else {
-                std::cout << "[Exe::Condition] : Condition not fulfilled";
-                if (parametersExecution.size() > 2) {
-                    std::cout << " (Second Branch)";
-                    parametersExecution[2].execute(prg);
-                }
-                std::cout << std::endl;
+            else if (parametersExecution.size() > 2 && condition.getType() == TokenType::Number && condition.getValue() == "0") {
+                //std::cout << " (Second Branch)";
+                parametersExecution[2].execute(prg);
+                //std::cout << std::endl;
             }
         }
         else if (getType() == TokenType::CurrentStackValue) {
-            Token valueAt = prg->getStackAt();
+            //std::cout << "Reading Stack.." << std::endl;
+            Token valueAt = prg->getStackAt(getDepth());
             this->type = valueAt.getType();
             this->value = valueAt.getValue();
-            std::cout << "[Exe:CurrentStackValue] : Returns current StackValue : " << getSummary() << std::endl;
+            //std::cout << "[Exe:CurrentStackValue] : Returns current StackValue : " << getSummary() << std::endl;
         }
         else if (getType() == TokenType::StackAccess) {
-            std::cout << "[Exe:StackAccess] : Store value : " << getInstructionContent(parametersExecution).getSummary() << " at $" << prg->getStackIndex() << std::endl;
-            prg->storeInStack(getInstructionContent(parametersExecution));
+            //std::cout << "[Exe:StackAccess] : Store value : " << getInstructionContent(parametersExecution).getSummary() << " at $" << prg->getStackIndex() << std::endl;
+
+            prg->storeInStack(getDepth(), getInstructionContent(parametersExecution));
         }
         else if (getType() == TokenType::Instruction) {
             this->type = getInstructionContent(parametersExecution).getType();
@@ -328,24 +335,36 @@ void Token::execute(Program* prg)
             Token jumpDest = getInstructionContent(parametersExecution);
             if (jumpDest.getType() == TokenType::Origin) {
                 prg->setSeekedFlag(prg->getNextOrigin());
-                std::cout << "[Exe:Goto] : Goto Origin : " << prg->getNextOrigin() << std::endl;
+                //std::cout << "[Exe:Goto] : Goto Origin : " << prg->getNextOrigin() << std::endl;
             }
             else {
-                std::cout << "[Exe:Goto] : Goto flag : " << getInstructionContent(parametersExecution).getValue() << std::endl;
-                std::cout << "[Exe::Goto] : Add Origin Marker : " << getInstructionContent(parametersExecution, 1).getValue() << std::endl;
+                //std::cout << "[Exe:Goto] : Goto flag : " << getInstructionContent(parametersExecution).getValue() << std::endl;
+                //std::cout << "[Exe::Goto] : Add Origin Marker : " << getInstructionContent(parametersExecution, 1).getValue() << std::endl;
                 prg->addOrigin(std::stoi(getInstructionContent(parametersExecution, 1).getValue()));
                 prg->setSeekedFlag(std::stoi(getInstructionContent(parametersExecution).getValue()));
             }
-            prg->stopExecution();            
+            prg->stopExecution(TokenType::Goto);            
         }
-        //std::cin.get();
+        else if (getType() == TokenType::GotoNoOrigin) {
+            prg->setSeekedFlag(std::stoi(getInstructionContent(parametersExecution).getValue()));
+            prg->stopExecution(TokenType::Goto);
+        }
+        else if (getType() == TokenType::ToggleExecution) {
+            prg->stopExecution(TokenType::ToggleExecution);
+        }
+        else if (getType() == TokenType::End) {
+            prg->stopProgram();
+        }
     }
-    else if (TokenType::Flag == this->getType() && prg->getSeekedFlag() == std::stoi(this->getValue())) {
-        std::cout << "[Exe:Flag] Flag found : Restarting execution" << std::endl;
+    else if (getType() == TokenType::ToggleExecution && prg->getPauseCause() == TokenType::ToggleExecution) {
         prg->startExecution();
     }
-    else if (TokenType::DynamicFlag == this->getType() && prg->getSeekedFlag() == std::stoi(this->getValue())) {
-        std::cout << "[Exe:Flag] Origin found : Restarting execution" << std::endl;
+    else if (TokenType::Flag == this->getType() && prg->getSeekedFlag() == std::stoi(this->getValue()) && prg->getPauseCause() == TokenType::Goto) {
+        //std::cout << "[Exe:Flag] Flag found : Restarting execution" << std::endl;
+        prg->startExecution();
+    }
+    else if (TokenType::DynamicFlag == this->getType() && prg->getSeekedFlag() == std::stoi(this->getValue()) && prg->getPauseCause() == TokenType::Goto) {
+        //std::cout << "[Exe:Flag] DynamicFlag found : Restarting execution" << std::endl;
         prg->startExecution();
         prg->removeOriginFlag(*this);
     }
@@ -363,12 +382,15 @@ Token Token::getInstructionContent(std::vector<Token>& tokens, int index)
     }
     return Token(TokenType::Null);
 }
-void Token::explore(std::vector<Token*>& list)
+void Token::explore(std::vector<Token*>& list, int depth)
 {
-    list.push_back(this);
-    std::cout << "Pushing : " << this->getSummary() << " to Crawler" << std::endl;
+    if (getDepth() == depth) {
+        list.push_back(this);
+        std::cout << "Pushing : " << this->getSummary() << " to Crawler" << std::endl;
+    }
+    
     for (Token& childToken : parameters) {
-        childToken.explore(list);
+        childToken.explore(list, depth);
     }
 }
 Token* Token::getAtID(int id)
@@ -386,6 +408,25 @@ Token* Token::getAtID(int id)
         return nullptr;
     }
 }
+void Token::eraseTokenAtID(int id)
+{
+    for (int i = 0; i < parameters.size(); i++) {
+        if (parameters[i].getID() == id) {
+            parameters.erase(parameters.begin() + i);
+            break;
+        }
+    }
+}
+int Token::getDepth()
+{
+    int depth = 0;
+    Token* tParent = getParent();
+    while (tParent != nullptr) {
+        depth++;
+        tParent = tParent->getParent();
+    }
+    return depth;
+}
 
 //TokenCrawler
 TokenCrawler::TokenCrawler(Token& tokens, Token* iterator)
@@ -393,6 +434,11 @@ TokenCrawler::TokenCrawler(Token& tokens, Token* iterator)
     this->iterator = iterator;
     tokens.explore(tokenVector);
     index = 0;
+}
+void TokenCrawler::refresh(Token& tokens, int depth)
+{
+    tokenVector.clear();
+    tokens.explore(tokenVector, depth);
 }
 void TokenCrawler::reset()
 {
@@ -424,6 +470,121 @@ std::vector<Token*> TokenCrawler::getList()
 {
     return tokenVector;
 }
+void Token::doSemantics()
+{
+    for (Token& token : parameters) {
+        token.doSemantics();
+    }
+    std::cout << "Do semantics for : " << getSummary() << std::endl;
+    int i = 0;
+    while (i < parameters.size()) {
+        Token& tok = parameters[i];
+        std::cout << "  Current SubToken : " << tok.getSummary() << std::endl;
+        for (int it = 0; it < TokenType::TypeParameters.size(); it++) {
+            int blocIndex = i + 1;
+            if (tok.getType() == TokenType::TypeParameters[it][0]) {
+                std::cout << "Currently trying ParaSet :";
+                for (int ik = 0; ik < TokenType::TypeParameters[it].size(); ik++) {
+                    std::cout << TokenType::TypeDataR[TokenType::TypeParameters[it][ik]].first << ";";
+                }
+                std::cout << std::endl;
+                std::cout << "    @Type Parameters Inspection " << TokenType::TypeDataR[tok.getType()].first << std::endl;
+                bool noAdd = true;
+                std::vector<Token> toAdd;
+                std::cout << "ParaSize " << TokenType::TypeParameters[it].size() << std::endl;
+                std::cout << "BlocSize " << blocIndex << "/" << tok.getParent()->getParameters()->size() << std::endl;
+                std::cout << "Current Elem : " << tok.getSummary() << " @" << blocIndex << std::endl;
+                for (int iPara = 1; iPara < TokenType::TypeParameters[it].size(); iPara++) {
+                    std::cout << "Current iPara : " << iPara << std::endl;
+                    std::cout << "Current blkIndex " << blocIndex << std::endl;
+                    std::cout << "        Expect : " << TokenType::TypeDataR[TokenType::TypeParameters[it][iPara]].first << std::endl;
+                    std::cout << "        Got : " << parameters[blocIndex].getSummary() << std::endl;
+                    if (TokenType::TypeParameters[it][iPara] == parameters[blocIndex].getType()) {
+                        std::cout << "        Add Parameter : " << parameters[blocIndex].getSummary() << std::endl;
+                        noAdd = false;
+                        toAdd.push_back(parameters[blocIndex++]);
+                    }
+                    else {
+                        noAdd = true;
+                        break;
+                    }
+                }
+                std::cout << "EOL" << std::endl;
+                if (!noAdd) {
+                    if (tok.getType() == TokenType::Condition) {
+                        std::cout << "BOUIT" << std::endl;
+                    }
+                    for (int i = 0; i < toAdd.size(); i++) {
+                        std::cout << "ADD : " << toAdd[i].getSummary() << std::endl; 
+                        tok.addParameter(toAdd[i]);
+                        this->eraseTokenAtID(toAdd[i].getID());
+                    }
+                    break;
+                }
+            }
+        }
+
+        i++;
+    }
+}
+void Token::doParametersAffectation() 
+{
+    for (Token& tok : parameters) {
+        tok.doParametersAffectation();
+    }
+    for (int i = 0; i < parameters.size(); i++) {
+        std::cout << "L00p" << std::endl;
+        Token& tok = parameters[i];
+        if (tok.getType() == TokenType::Function) {
+            std::cout << "Parametrics of : " << tok.getSummary() << std::endl;
+            std::vector<int> indexToErase;
+            for (int j = i + 1; j < StdLib::FunctionsName[tok.getValue()].second + i + 1; j++) {
+                std::cout << "[ADDING PARAMETER] : " << parameters[j].getPrintableType() << std::endl;
+                //parameters[j].doParametersAffectation();
+                tok.addParameter(parameters[j]);
+                indexToErase.push_back(j);
+                std::cout << "Closure" << std::endl;
+            }
+            std::reverse(indexToErase.begin(), indexToErase.end());
+            tok.inspect();
+            for (int j = 0; j < indexToErase.size(); j++) {
+                std::cout << "Erase : " << indexToErase[j] << " of size" << parameters.size() << "?" << j << std::endl;
+                parameters.erase(parameters.begin() + indexToErase[j]);
+            }
+        }
+    }
+}
+void Token::doDynamicFlags(int& flagCounter)
+{
+    for (int i = 0; i < parameters.size(); i++) {
+        int tokID = parameters[i].getID();
+        getAtID(tokID)->doDynamicFlags(flagCounter);
+        if (getAtID(tokID)->getType() == TokenType::Goto || this->getAtID(tokID)->getType() == TokenType::Condition) {
+            getAtID(tokID)->inspect();
+            std::cout << "Dynamic Flagging : " << getAtID(tokID)->getSummary() << std::endl;
+            std::cout << "<" << i + 1 << " / " << getAtID(tokID)->getParameters()->size() - 1 << "> ";
+            if (i + 1 < parameters.size()) {
+                std::cout << "GetNextParameter : " << parameters[i + 1].getSummary();
+            }
+            std::cout << std::endl;
+            if (getAtID(tokID)->getType() == TokenType::Goto && getAtID(tokID)->getParameters()->size() == 1 &&getAtID(tokID)->getParameters()->at(0).getType() == TokenType::Number) {
+                std::cout << "[Compilation] : Creating DynamicFlag for Goto Instruction" << std::endl;
+                std::cout << "CCurrent : " << getAtID(tokID)->getSummary() << std::endl;
+                this->insertAfter(tokID, Token(TokenType::DynamicFlag, std::to_string(++flagCounter)));
+                std::cout << "Add Parameter to : " << getAtID(tokID)->getSummary() << std::endl;
+                getAtID(tokID)->addParameter(Token(TokenType::Number, std::to_string(flagCounter)));
+            }
+            else if (getAtID(tokID)->getType() == TokenType::Condition && getAtID(tokID)->getParameters()->size() == 3 && getAtID(tokID)->getParameters()->at(1).getType() == TokenType::Instruction) {
+                std::cout << "[Compilation] : Creating DynamicFlag for Condition Instruction" << std::endl;
+                this->insertAfter(tokID, Token(TokenType::DynamicFlag, std::to_string(++flagCounter)));
+                Token firstBranchJump = Token(TokenType::GotoNoOrigin);
+                firstBranchJump.addParameter(Token(TokenType::Number, std::to_string(flagCounter)));
+                Token& firstBranch = getAtID(tokID)->getParameters()->at(1);
+                firstBranch.addParameter(firstBranchJump);
+            }
+        }
+    }
+}
 
 
 //Program
@@ -443,15 +604,11 @@ void Program::removeOriginFlag(Token& flag)
 {
     if (flag.getType() == TokenType::DynamicFlag && std::stoi(flag.getValue()) == origins.back()) {
         origins.pop_back();
-        flag = Token(TokenType::Null);
-    }
-    else
-    {
-        std::cout << "Pas bon :(" << std::endl;
     }
 }
-void Program::stopExecution()
+void Program::stopExecution(TokenType::Type cause)
 {
+    pauseCause = cause;
     execution = false;
 }
 void Program::startExecution()
@@ -470,19 +627,35 @@ int Program::getSeekedFlag()
 {
     return flagSeeked;
 }
-void Program::setStackPosition(std::string pos)
+void Program::setStackPosition(int depth, std::string pos)
 {
-    std::cout << "[Exe] StackPosition switched to : " << pos << std::endl;
+    //std::cout << "[Exe] StackPosition switched to : " << pos << std::endl;
+    if (depth == stackPosition.size() - 1) {
+        stackPosition[stackPosition.size() - 1] = std::pair<std::string, int>(pos, 0);
+    }
+    else if (depth >= stackPosition.size()) {
+        //Follow
+    }
     stackPosition = pos;
 }
-void Program::setStackPosition(int pos)
+void Program::setStackPosition(int depth, int pos)
 {
-    std::cout << "[Exe] SubStackPosition switched to : " << pos << std::endl;
+    //std::cout << "[Exe] SubStackPosition switched to : " << pos << std::endl;
     subStackPosition = pos;
 }
-Token Program::getStackAt()
+Token Program::getStackAt(int depth)
 {
-    return stack[stackPosition][subStackPosition];
+    /*std::cout << "Reading Position : " << stackPosition << " / " << subStackPosition << std::endl;
+    std::cout << "Stack returned : " << stack[stackPosition][subStackPosition].getSummary() << std::endl;*/
+    if (stack.find(stackPosition) == stack.end()) {
+        std::cout << "[Error] : Unknown Stack Position : " << stackPosition << std::endl;
+    }
+    else if (stack[stackPosition].size() < subStackPosition) {
+        std::cout << "[Error] : Unknown SubStack Position : " << subStackPosition << std::endl;
+    }
+    else {
+        return stack[stackPosition][subStackPosition];
+    }
 }
 void Program::storeInStack(Token token)
 {
@@ -528,60 +701,23 @@ void Program::parseFile(std::string path)
     }
 
     bool blocChange = true;
-    std::cout << "Beginning instruction" << std::endl;
+    instructions.inspect();
+    std::cout << "Beginning Compression" << std::endl;
     std::vector<Token> compressionStack;
     bool compressionStackOpened = false;
     int compressionStackIndex = 0;
     int stackType;
     while (blocChange) {
-        std::cout << "Bloc changed, restart" << std::endl;
+        std::cout << "Bloc iteration" << std::endl;
         blocChange = false;
         int instIndex = 0;
-        std::cout << "Bloc size : " << instructions.getParameters()->size() << std::endl;
         while (instIndex < instructions.getParameters()->size()) {
             Token& tok = instructions.getParameters()->at(instIndex);
-            std::cout << "Current Token : " << tok.getSummary() << std::endl;
-            for (int it = 0; it < TokenType::TypeParameters.size(); it++) { //Type Parameters
-                if (tok.getType() == TokenType::TypeParameters[it][0] && instIndex + TokenType::TypeParameters[it].size() - 1 < instructions.getParameters()->size()) {
-                    std::cout << "    @Type Parameters Inspection " << TokenType::TypeDataR[tok.getType()].first << std::endl;
-                    int pindex = 1;
-                    bool noAdd = true;
-                    std::vector<Token> toAdd;
-                    std::cout << "VecSize " << TokenType::TypeParameters[it].size() << std::endl;
-                    std::cout << "InsVecSize " << instructions.getParameters()->size() << "/" << instIndex << std::endl;
-                    std::cout << "Current Elem : " << TokenType::TypeDataR[instructions.getParameters()->at(instIndex).getType()].first << " @" << instIndex << std::endl;
-                    for (int iPara = 1; iPara < TokenType::TypeParameters[it].size(); iPara++) {
-                        std::cout << "Current iPara : " << iPara << std::endl;
-                        std::cout << "Current ndIndex " << instIndex + pindex << std::endl;
-                        std::cout << "        Expect : " << TokenType::TypeDataR[TokenType::TypeParameters[it][iPara]].first << std::endl;
-                        std::cout << "        Got : " << TokenType::TypeDataR[instructions.getParameters()->at(instIndex + pindex).getType()].first << std::endl;
-                        if (TokenType::TypeParameters[it][iPara] == instructions.getParameters()->at(instIndex + pindex).getType()) {
-                            std::cout << "        Add Parameter : " << TokenType::TypeDataR[instructions.getParameters()->at(instIndex + pindex).getType()].first << std::endl;
-                            noAdd = false;
-                            toAdd.push_back(instructions.getParameters()->at(instIndex + pindex));
-                            pindex++;
-                        }
-                        else {
-                            noAdd = true;
-                            break;
-                        }
-                    }
-                    std::cout << "EOL" << std::endl;
-                    if (!noAdd) {
-                        for (int i = 0; i < toAdd.size(); i++) {
-                            std::cout << "ADD : " << TokenType::TypeDataR[toAdd[i].getType()].first << std::endl; 
-                            tok.addParameter(toAdd[i]);
-                        }
-                        instructions.getParameters()->erase(instructions.getParameters()->begin() + instIndex + 1, instructions.getParameters()->begin() + instIndex + toAdd.size() + 1);
-                        std::cout << "BLOC CHANGED !" << std::endl;
-                        blocChange = true;
-                    }
-                }
-            }
             if (compressionStackOpened) {
                 compressionStack.push_back(tok);
             }
             if (!blocChange) {
+                std::cout << "NoBC" << std::endl;
                 for (int i = 0; i < TokenType::TypeCompression.size(); i++) { //Type compression 
                     if (tok.getType() == TokenType::TypeCompression[i][0]) {
                         std::cout << "    Stack opened for : " << TokenType::TypeDataR[tok.getType()].first << std::endl;
@@ -621,59 +757,25 @@ void Program::parseFile(std::string path)
             instIndex++;
         }
     }
+    instructions.inspect();
+    blocChange = true;
+    
+    std::cout << "Start Instruction Emb" << std::endl;
+    std::cout << "[Compilation] Creating Semantic Tree" << std::endl;
+    instructions.doSemantics();
+    
+    
+    std::cout << "End of Imb" << std::endl;
+    instructions.inspect();
     //Function Imbrication
-    parametersAffectation(instructions.getParameters());
+    std::cout << "[Compilation] Affecting Functions Parameters" << std::endl;
+    instructions.doParametersAffectation();
 
     //Dynamic Flag
-    Token tok(TokenType::Null);
-    TokenCrawler tkCrawler(instructions, &tok);
     instructions.inspect();
-    std::vector<Token*> allTok = tkCrawler.getList();
-    for (int i = 0; i < allTok.size(); i++) {
-        Token* tok = allTok[i];
-        std::cout << "@@@ " << tok->getSummary() << std::endl;
-        if (tok->getType() == TokenType::Goto) {
-            std::cout << "!!! " << tok->getID() << " is GOTO" << std::endl;
-            if (i != allTok.size() - 1) {
-                std::cout << "!!! " << tok->getID() << " has next" << std::endl;
-                std::cout << "Next type : " << allTok[i + 1]->getSummary() << std::endl;
-                bool meh = (allTok[i + 1]->getType() == TokenType::Number);
-                std::cout << "Is equal : " << meh << std::endl;
-                
-                if (allTok[i + 1]->getType() == TokenType::Number) { //INSERTION CAUSE DIS PROBLEM OF DECALAGE
-                    std::cout << "!!! " << tok->getID() << " has number" << std::endl;
-                    std::cout << "[AddDynamicFlag] : " << tok->getID() << " with ParentID : " << tok->getParentID() << std::endl;
-                    instructions.getAtID(tok->getParentID())->insertAfter(tok->getID(), Token(TokenType::DynamicFlag, std::to_string(++flagCounter)));
-                    tok->addParameter(Token(TokenType::Number, std::to_string(flagCounter)));
-                }
-            }
-        }
-    }
-    instructions.inspect();
-}
-void parametersAffectation(std::vector<Token>* tokens)
-{
-    for (int i = 0; i < tokens->size(); i++) {
-        Token& tok = tokens->at(i);
-        parametersAffectation(tok.getParameters());
-        std::cout << tok.getSummary() << std::endl;
-        if (tok.getType() == TokenType::Function) {
-            std::cout << "Type Func" << std::endl;
-            std::vector<int> indexToErase;
-            for (int j = i + 1; j < StdLib::FunctionsName[tok.getValue()].second + i + 1; j++) {
-                std::cout << "[ADDING PARAMETER] : " << tokens->at(j).getPrintableType() << std::endl;
-                parametersAffectation(tokens->at(j).getParameters());
-                tok.addParameter(tokens->at(j));
-                indexToErase.push_back(j);
-                std::cout << "Closure" << std::endl;
-            }
-            std::reverse(indexToErase.begin(), indexToErase.end());
-            for (int j = 0; j < indexToErase.size(); j++) {
-                std::cout << "Erase : " << indexToErase[j] << " of size" << tokens->size() << "?" << j << std::endl;
-                tokens->erase(tokens->begin() + indexToErase[j]);
-            }
-        }
-    }
+    std::cout << "[Compilation] Creating DynamicFlags" << std::endl;
+    instructions.doDynamicFlags(flagCounter);
+    std::cout << "Crawled" << std::endl;
 }
 void Program::exec()
 {
@@ -685,4 +787,13 @@ void Program::exec()
 std::string Program::getStackIndex()
 {
     return stackPosition;
+}
+void Program::stopProgram()
+{
+    execution = false;
+    isProgramOver = true;
+}
+TokenType::Type Program::getPauseCause()
+{
+    return pauseCause;
 }
