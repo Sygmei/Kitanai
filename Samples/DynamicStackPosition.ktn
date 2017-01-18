@@ -1,0 +1,9 @@
+$"coucou"$3
+["Success !"]
+$"nothere"$1
+["Failed !"]
+print @
+$(add "cou" "cou")
+$(sub 5 2)
+print @
+%

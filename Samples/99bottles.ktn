@@ -1,0 +1,20 @@
+$"quant"[99]
+#
+    ?(gt @ 1) (
+        print((add(add(add (string @) " bottles of beer on the wall, ")(string @)) " bottles of beer."))
+        ?(gt @ 2) (
+            $"suffix"[add (string(sub ($"quant"@) 1)) " bottles of beer on the wall."]
+        ) (
+            $"suffix"["1 bottle of beer on the wall."]
+        )
+    ) (
+        ?(eq ($"quant"@) 1) (
+            print "1 bottle of beer on the wall, 1 bottle of beer."
+            $"suffix"["no more beer on the wall!"]
+        )
+    )
+    print (add "Take one down, pass it around, " ($"suffix"@))
+    print ""
+    $"quant"[sub @ 1]
+    ?(neq @ 0) (&1)
+%

@@ -1,0 +1,7 @@
+split"result""bonjour,petit,homme,des,bois"","
+$"result"
+$"i"[4]#
+    print(($"result"$($"i"@)@))
+    $"i"[sub @ 1]
+?(neq ($"i"@) -1)(&1)
+%

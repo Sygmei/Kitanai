@@ -1,32 +1,18 @@
 #pragma once
 
-#include <string>
-#include <iostream>
-#include <vector>
-#include <map>
-#include <typeinfo>
-#include <fstream>
 #include <algorithm>
-#include <functional>
-#include <random>
 #include <chrono>
+#include <fstream>
+#include <functional>
+#include <iostream>
+#include <map>
+#include <random>
 #include <sstream>
+#include <string>
+#include <typeinfo>
+#include <vector>
 
-std::vector<std::string> split(const std::string &str, const std::string &delimiters = " ");
-std::string replaceString(std::string subject, const std::string& search, const std::string &replace);
-typedef std::tuple<std::vector<std::string>, std::vector<std::string>, std::vector<std::pair<int, int>>> ExtractionResult;
-ExtractionResult extractStrings(std::string string);
-void removeCharFromString(std::string &str, std::string charToRemove);
-int occurencesInString(std::string str, std::string occur) ;
-bool isStringNumeric(std::string str);
-bool isStringInt(std::string str);
-bool isStringFloat(std::string str);
-
-struct cmpByStringLength {
-    bool operator()(const std::string& a, const std::string& b) const {
-        return a.length() > b.length();
-    }
-};
+#include "Functions.hpp"
 
 namespace TokenType
 {
@@ -100,6 +86,7 @@ namespace TokenType
         {GotoNoOrigin, Number},
         {StackAt, String},
         {StackAt, Number},
+		{StackAt, Instruction},
         {Condition, Instruction, Instruction, Instruction},
         {Condition, Instruction, Instruction}
     };
@@ -116,13 +103,14 @@ class Token
         static int TokenAmount;
         int id = 0;
         int parentID = -1;
-        Token* parent;
+        Token* parent = nullptr;
         TokenType::Type type;
         std::string value;
         std::vector<Token> parameters;
-        void explore(std::vector<Token*>& list, int depth = -1);
-        friend class TokenCrawler;
     public:
+		static bool _execDebug;
+		static bool _compDebug;
+		static bool _dispMemAd;
         Token(TokenType::Type type);
         Token(TokenType::Type type, std::string value);
         void setParent(Token* parent);
@@ -142,31 +130,13 @@ class Token
         Token getInstructionContent(std::vector<Token>& tokens, int index = 0);
         Token* getParent();
         void insertAfter(int id, Token token);
-        bool operator==(Token& other);
         int getDepth();
-        void doSemantics();
+        void doAST();
         void doParametersAffectation();
         void doDynamicFlags(int& flagCounter);
+		void doChainAdoption();
 };
 
-class TokenCrawler 
-{
-    private:
-        std::vector<Token*> tokenVector;
-        Token* iterator = nullptr;
-        int index = 0;
-    public:
-        TokenCrawler(Token& tokens, Token* iterator);
-        void refresh(Token& tokens, int depth = -1);
-        void reset();
-        bool next();
-        bool hasNext();
-        Token* get();
-        Token* getAtOffset(int offset);
-        Token* find(int id);
-        std::vector<Token*> getList();
-};
-void parametersAffectation(std::vector<Token>* tokens);
 std::vector<Token> stringToTokens(int& flagCounter, std::string string);
 
 namespace StdLib
@@ -190,14 +160,31 @@ namespace StdLib
         Token a = tokens[0];
         Token b = tokens[1];
         if (a.getType() == TokenType::Number && b.getType() == TokenType::Number)
-            return Token(TokenType::Number, std::to_string(std::stod(a.getValue()) * std::stod(b.getValue())));
+            return Token(TokenType::Number, std::to_string((int)(std::stod(a.getValue()) * std::stod(b.getValue()))));
     }
     Token f_div(const std::vector<Token> tokens) {
         Token a = tokens[0];
         Token b = tokens[1];
         if (a.getType() == TokenType::Number && b.getType() == TokenType::Number)
-            return Token(TokenType::Number, std::to_string(std::stoi(a.getValue()) / std::stoi(b.getValue())));
+            return Token(TokenType::Number, std::to_string((int)std::stod(a.getValue()) / std::stod(b.getValue())));
     }
+	Token f_mod(const std::vector<Token> tokens) {
+		Token a = tokens[0];
+		Token b = tokens[1];
+		if (a.getType() == TokenType::Number && b.getType() == TokenType::Number)
+			return Token(TokenType::Number, std::to_string(std::stoi(a.getValue()) % std::stoi(b.getValue())));
+	}
+	Token f_not(const std::vector<Token> tokens) {
+		Token a = tokens[0];
+		if (a.getType() == TokenType::Number) {
+			if (a.getValue() == "0") {
+				return Token(TokenType::Number, "1");
+			}
+			else {
+				return Token(TokenType::Number, "0");
+			}
+		}
+	}
     Token f_eq(const std::vector<Token> tokens) {
         Token a = tokens[0];
         Token b = tokens[1];
@@ -229,14 +216,32 @@ namespace StdLib
     Token f_ge(const std::vector<Token> tokens) {
         Token a = tokens[0];
         Token b = tokens[1];
+		if (a.getType() == TokenType::Number && b.getType() == TokenType::Number) {
+			return Token(TokenType::Number, std::to_string(std::stod(a.getValue()) >= std::stod(b.getValue())));
+		}
+		if (a.getType() == TokenType::String && b.getType() == TokenType::String) {
+			return Token(TokenType::Number, std::to_string(a.getValue().size() >= b.getValue().size()));
+		}
     }
     Token f_lt(const std::vector<Token> tokens) {
         Token a = tokens[0];
         Token b = tokens[1];
+		if (a.getType() == TokenType::Number && b.getType() == TokenType::Number) {
+			return Token(TokenType::Number, std::to_string(std::stod(a.getValue()) < std::stod(b.getValue())));
+		}
+		if (a.getType() == TokenType::String && b.getType() == TokenType::String) {
+			return Token(TokenType::Number, std::to_string(a.getValue().size() < b.getValue().size()));
+		}
     }
     Token f_le(const std::vector<Token> tokens) {
         Token a = tokens[0];
         Token b = tokens[1];
+		if (a.getType() == TokenType::Number && b.getType() == TokenType::Number) {
+			return Token(TokenType::Number, std::to_string(std::stod(a.getValue()) <= std::stod(b.getValue())));
+		}
+		if (a.getType() == TokenType::String && b.getType() == TokenType::String) {
+			return Token(TokenType::Number, std::to_string(a.getValue().size() <= b.getValue().size()));
+		}
     }
     Token f_print(const std::vector<Token> tokens) {
         Token a = tokens[0];
@@ -266,9 +271,28 @@ namespace StdLib
         std::uniform_real_distribution<double> unif(0, 1);
         return Token(TokenType::Number, std::to_string(unif(rng)));
     }
+	Token f_split(const std::vector<Token> tokens) {
+		Token saveTo = tokens[0];
+		Token string = tokens[1];
+		Token delimiter = tokens[2];
+		Token storeInstruction(TokenType::Instruction);
+		Token accessMemory = Token(TokenType::StackAt);
+		accessMemory.addParameter(saveTo);
+		storeInstruction.addParameter(accessMemory);
+		std::vector<std::string> splittedString = split(string.getValue(), delimiter.getValue());
+		for (int i = 0; i < splittedString.size(); i++) {
+			Token incMemory(TokenType::StackAt);
+			incMemory.addParameter(Token(TokenType::Number, std::to_string(i)));
+			Token writeMemory(TokenType::StackAccess);
+			writeMemory.addParameter(Token(TokenType::String, splittedString[i]));
+			storeInstruction.addParameter(incMemory);
+			storeInstruction.addParameter(writeMemory);
+		}
+		return storeInstruction;
+	}
     Token B_(std::string funcname, int amount, std::function<Token(const std::vector<Token>)> func, std::vector<Token> parameters) {
         if (amount != parameters.size()) {
-            std::cout << "ERROR ! Number of parameters not correct in function : " << funcname << std::endl;
+            std::cout << "[Error] Number of parameters not correct in function : " << funcname << std::endl;
             return Token(TokenType::Null);
         }
         return func(parameters);
@@ -283,6 +307,8 @@ namespace StdLib
         B__("sub", f_sub, 2),
         B__("mul", f_mul, 2),
         B__("div", f_div, 2),
+		B__("mod", f_mod, 2),
+		B__("not", f_not, 1),
         B__("eq", f_eq, 2),
         B__("neq", f_neq, 2),
         B__("gt", f_gt, 2),
@@ -293,7 +319,8 @@ namespace StdLib
         B__("input", f_input, 1),
         B__("string",  f_string, 1),
         B__("int", f_int, 1),
-        B__("random", f_random, 0)
+        B__("random", f_random, 0),
+		B__("split", f_split, 3)
     };
 }
 
@@ -313,12 +340,14 @@ class Program
         int linePosition;
     public:
         Program();
+		bool compDebug = false;
         void parseFile(std::string path);
         void exec();
-        void setStackPosition(int depth, std::string pos);
-        void setStackPosition(int depth, int pos);
-        Token getStackAt(int depth);
-        void storeInStack(int depth, Token token);
+		void setDepth(int depth);
+        void setStackPosition(std::string pos);
+        void setStackPosition(int pos);
+        Token getStackAt();
+        void storeInStack(Token token);
         void stopExecution(TokenType::Type cause);
         void startExecution();
         void stopProgram();
@@ -329,7 +358,5 @@ class Program
         void addOrigin(int flagNumber);
         int getNextOrigin();
         void removeOriginFlag(Token& flag);
-        std::string getStackIndex();
+        std::pair<std::string, int> getStackPosition();
 };
-
-void execFile(std::string path);
