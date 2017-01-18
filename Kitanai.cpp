@@ -2,6 +2,7 @@
 
 int main(int argc, char** argv)
 {
+    StdLib::FunctionsName["func"] = StdLib::fRightPart("func", StdLib::f_func, 3);
 	RunArgParser runParser(argv, argc);
 	Program prog;
 	if (argc == 2 || runParser.argumentExists("-f")) {
@@ -18,6 +19,9 @@ int main(int argc, char** argv)
 		if (runParser.argumentExists("-a")) {
 			Token::_dispMemAd = true;
 		}
+        if (runParser.argumentExists("-i")) {
+            prog.import(runParser.getArgumentValue("-i"));
+        }
 		
 		prog.parseFile((argc == 2) ? argv[1] : runParser.getArgumentValue("-f"));
 		prog.exec();
@@ -173,13 +177,16 @@ void Token::execute(Program* prg)
 {
     std::vector<Token> parametersExecution = parameters;
 	doChainAdoption();
-    if (getType() != TokenType::Condition) {
+    if (getType() == TokenType::Condition) {
+        parametersExecution[0].execute(prg);
+    }
+    else if (getType() == TokenType::Function && getValue() == "func") {
+    }
+    else
+    {
         for (Token& tok : parametersExecution) {
             tok.execute(prg);
         }
-    }
-    else {
-        parametersExecution[0].execute(prg);
     }
 	if (getType() != TokenType::Null && parent != nullptr) {
 		prg->setDepth(getDepth());
@@ -196,7 +203,7 @@ void Token::execute(Program* prg)
 				returnValue.doChainAdoption();
 				returnValue.setParent(this);
 				returnValue.execute(prg);
-				if (_execDebug) std::cout << "[Exe::Function] " << getValue() << " returned : " << returnValue.getSummary() << std::endl;
+				if (_execDebug) std::cout << "[Exe::Function] " << getValue() << " returned : " << returnValue.getValue() << std::endl;
 				this->type = returnValue.getType();
 				this->value = returnValue.getValue();
 			}
@@ -238,7 +245,7 @@ void Token::execute(Program* prg)
 
 				prg->storeInStack(getInstructionContent(parametersExecution));
 			}
-			else if (getType() == TokenType::Instruction) {
+			else if (getType() == TokenType::Instruction && getValue() != "Ignore") {
 				this->type = getInstructionContent(parametersExecution).getType();
 				this->value = getInstructionContent(parametersExecution).getValue();
 			}
@@ -289,7 +296,9 @@ Token Token::getInstructionContent(std::vector<Token>& tokens, int index)
 {
     int cIndex = 0;
     for (Token token : tokens) {
-        if (token.getType() != TokenType::Null && cIndex == index) {
+        if (token.getType() == TokenType::Instruction && token.getValue() == "Ignore") {
+        }
+        else if (token.getType() != TokenType::Null && cIndex == index) {
             return token;
         }
         else if (token.getType() != TokenType::Null) {
@@ -641,6 +650,20 @@ void Program::exec()
     while (!isProgramOver) {
         instructions.execute(this);
     }
+}
+void Program::import(std::string path)
+{
+    for (int i = 0; i < 2; i++) {
+        this->parseFile(path);
+        this->exec();
+        this->instructions = Token(TokenType::Instruction);
+        isProgramOver = false;
+        execution = true;
+    }
+}
+Token& Program::getInstructions()
+{
+    return instructions;
 }
 std::pair<std::string, int> Program::getStackPosition()
 {

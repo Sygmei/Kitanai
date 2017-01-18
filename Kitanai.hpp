@@ -68,7 +68,7 @@ namespace TokenType
         {Flag, {"Flag", "#"}},
         {DynamicFlag, {"DynamicFlag", ""}},
         {Goto, {"Goto", "&"}},
-        {GotoNoOrigin, {"GotoNoOrigin", "-&"}},
+        {GotoNoOrigin, {"GotoNoOrigin", "*"}},
         {Origin, {"Origin", "~"}},
         {NewInstruction, {"NewInstruction", ";"}},
         {End, {"End", "%"}},
@@ -290,38 +290,85 @@ namespace StdLib
 		}
 		return storeInstruction;
 	}
-    Token B_(std::string funcname, int amount, std::function<Token(const std::vector<Token>)> func, std::vector<Token> parameters) {
+    Token fBuild(std::string funcname, int amount, std::function<Token(const std::vector<Token>)> func, std::vector<Token> parameters) {
         if (amount != parameters.size()) {
             std::cout << "[Error] Number of parameters not correct in function : " << funcname << std::endl;
             return Token(TokenType::Null);
         }
         return func(parameters);
     }
-    std::pair<std::string, std::pair<std::function<Token(const std::vector<Token>)>, int>> B__(std::string name, std::function<Token(const std::vector<Token>)> func, int amount) {
-        std::pair<std::function<Token(const std::vector<Token>)>, int> rpart = 
-        std::pair<std::function<Token(const std::vector<Token>)>, int>(std::bind(B_, name, amount, func, std::placeholders::_1), amount);
+    std::pair<std::function<Token(const std::vector<Token>)>, int> fRightPart (std::string name, std::function<Token(const std::vector<Token>)> func, int amount) {
+        return std::pair<std::function<Token(const std::vector<Token>)>, int>(std::bind(fBuild, name, amount, func, std::placeholders::_1), amount);
+    }
+    std::pair<std::string, std::pair<std::function<Token(const std::vector<Token>)>, int>> f(std::string name, std::function<Token(const std::vector<Token>)> func, int amount) {
+        std::pair<std::function<Token(const std::vector<Token>)>, int> rpart = fRightPart(name, func, amount);
         return std::pair<std::string, std::pair<std::function<Token(const std::vector<Token>)>, int>>(name, rpart);
     }
     static std::map<std::string, std::pair<std::function<Token(const std::vector<Token>)>, int>> FunctionsName = {
-        B__("add", f_add, 2),
-        B__("sub", f_sub, 2),
-        B__("mul", f_mul, 2),
-        B__("div", f_div, 2),
-		B__("mod", f_mod, 2),
-		B__("not", f_not, 1),
-        B__("eq", f_eq, 2),
-        B__("neq", f_neq, 2),
-        B__("gt", f_gt, 2),
-        B__("ge", f_ge, 2),
-        B__("lt", f_lt, 2),
-        B__("le", f_le, 2),
-        B__("print", f_print, 1),
-        B__("input", f_input, 1),
-        B__("string",  f_string, 1),
-        B__("int", f_int, 1),
-        B__("random", f_random, 0),
-		B__("split", f_split, 3)
+        f("add", f_add, 2),
+        f("sub", f_sub, 2),
+        f("mul", f_mul, 2),
+        f("div", f_div, 2),
+		f("mod", f_mod, 2),
+		f("not", f_not, 1),
+        f("eq", f_eq, 2),
+        f("neq", f_neq, 2),
+        f("gt", f_gt, 2),
+        f("ge", f_ge, 2),
+        f("lt", f_lt, 2),
+        f("le", f_le, 2),
+        f("print", f_print, 1),
+        f("input", f_input, 1),
+        f("string",  f_string, 1),
+        f("int", f_int, 1),
+        f("random", f_random, 0),
+		f("split", f_split, 3),
     };
+
+    static std::map<std::string, Token*> customFunctions = {};
+    Token fCall(std::string funcName, int expectedArgs, const std::vector<Token> tokens) {
+        if (expectedArgs == tokens.size()) {
+            Token callInstruction(TokenType::Instruction);
+            Token argDef(TokenType::Instruction, "Ignore");
+            Token toArgs(TokenType::StackAt);
+            toArgs.addParameter(Token(TokenType::String, "args"));
+            argDef.addParameter(toArgs);
+            for (int i = 0; i < tokens.size(); i++) {
+                Token incMemory(TokenType::StackAt);
+                incMemory.addParameter(Token(TokenType::Number, std::to_string(i)));
+                Token writeMemory(TokenType::StackAccess);
+                writeMemory.addParameter(tokens[i]);
+                argDef.addParameter(incMemory);
+                argDef.addParameter(writeMemory);
+            }
+            Token funcCode(TokenType::Instruction, "Code");
+            funcCode.addParameter(toArgs);
+            for (Token& tok : *customFunctions[funcName]->getParameters()) {
+                funcCode.addParameter(tok);
+            }
+            callInstruction.addParameter(argDef);
+            callInstruction.addParameter(funcCode);
+            return callInstruction;
+        }
+        else {
+            std::cout << "[Error] Number of parameters not correct in custom function : " << funcName << " (expected "<< expectedArgs << " got " << tokens.size() << ")" << std::endl;
+            for (int i = 0; i < tokens.size(); i++) {
+                Token cTok = tokens[i];
+                std::cout << "Arg#" << i << " : " << cTok.getSummary() << std::endl;
+            }
+            return Token(TokenType::Null);
+        }
+    }
+    Token f_func(const std::vector<Token> tokens) {
+        Token tFuncName = tokens[0];
+        Token tFuncArgs = tokens[1];
+        std::string funcName = tFuncName.getValue();
+        int funcArgs = std::stoi(tFuncArgs.getValue());
+        Token funcBody = tokens[2];
+        customFunctions[funcName] = new Token(funcBody);
+        FunctionsName[funcName] = std::pair<std::function<Token(const std::vector<Token>)>, int>(std::bind(fCall, funcName, funcArgs, std::placeholders::_1), funcArgs);
+        return Token(TokenType::Null);
+    }
 }
 
 class Program
@@ -358,5 +405,7 @@ class Program
         void addOrigin(int flagNumber);
         int getNextOrigin();
         void removeOriginFlag(Token& flag);
+        void import(std::string path);
+        Token& getInstructions();
         std::pair<std::string, int> getStackPosition();
 };
