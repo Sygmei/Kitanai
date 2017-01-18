@@ -1,2 +1,2 @@
 # Kitanai
-Tiny and dirty language
+Tiny and dirty esoteric language
