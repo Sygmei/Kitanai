@@ -1,0 +1,13 @@
+read "Rec.ktn" "File"
+$"index"$0[0]
+$1[$"File"^]
+print(@)
+#
+    $"index"
+    ?(neq ($0@) ($1@)) (
+        $"File"$($"index"$0@)
+        print(add(string($"index"$0@))(add " : " @))
+        $"index"$0[add@1]
+        &1
+    )
+%
