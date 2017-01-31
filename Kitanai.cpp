@@ -177,7 +177,7 @@ void Token::execute(Program* prg)
 {
     std::vector<Token> parametersExecution = parameters;
 	doChainAdoption();
-    if (getType() == TokenType::Condition) {
+    if (getType() == TokenType::Condition && prg->canExecute()) {
         parametersExecution[0].execute(prg);
     }
     else if (getType() == TokenType::Function && getValue() == "func") {

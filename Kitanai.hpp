@@ -145,7 +145,7 @@ namespace StdLib
         Token a = tokens[0];
         Token b = tokens[1];
         if (a.getType() == TokenType::Number && b.getType() == TokenType::Number)
-            return Token(TokenType::Number, std::to_string(std::stoi(a.getValue()) + std::stoi(b.getValue())));
+            return Token(TokenType::Number, std::to_string(std::stoll(a.getValue()) + std::stoll(b.getValue())));
         else {
             return Token(TokenType::String, a.getValue() + b.getValue());
         }
@@ -154,25 +154,25 @@ namespace StdLib
         Token a = tokens[0];
         Token b = tokens[1];
         if (a.getType() == TokenType::Number && b.getType() == TokenType::Number)
-            return Token(TokenType::Number, std::to_string(std::stoi(a.getValue()) - std::stoi(b.getValue())));
+            return Token(TokenType::Number, std::to_string(std::stoll(a.getValue()) - std::stoll(b.getValue())));
     }
     Token f_mul(const std::vector<Token> tokens) {
         Token a = tokens[0];
         Token b = tokens[1];
         if (a.getType() == TokenType::Number && b.getType() == TokenType::Number)
-            return Token(TokenType::Number, std::to_string((int)(std::stod(a.getValue()) * std::stod(b.getValue()))));
+            return Token(TokenType::Number, std::to_string((long long int)(std::stod(a.getValue()) * std::stod(b.getValue()))));
     }
     Token f_div(const std::vector<Token> tokens) {
         Token a = tokens[0];
         Token b = tokens[1];
         if (a.getType() == TokenType::Number && b.getType() == TokenType::Number)
-            return Token(TokenType::Number, std::to_string((int)std::stod(a.getValue()) / std::stod(b.getValue())));
+            return Token(TokenType::Number, std::to_string((long long int)std::stod(a.getValue()) / std::stod(b.getValue())));
     }
 	Token f_mod(const std::vector<Token> tokens) {
 		Token a = tokens[0];
 		Token b = tokens[1];
 		if (a.getType() == TokenType::Number && b.getType() == TokenType::Number)
-			return Token(TokenType::Number, std::to_string(std::stoi(a.getValue()) % std::stoi(b.getValue())));
+			return Token(TokenType::Number, std::to_string(std::stoll(a.getValue()) % std::stoll(b.getValue())));
 	}
 	Token f_not(const std::vector<Token> tokens) {
 		Token a = tokens[0];
@@ -271,6 +271,10 @@ namespace StdLib
         std::uniform_real_distribution<double> unif(0, 1);
         return Token(TokenType::Number, std::to_string(unif(rng)));
     }
+	Token f_time(const std::vector<Token> tokens) {
+		std::string retTime = std::to_string(std::chrono::system_clock::now().time_since_epoch() / std::chrono::milliseconds(1));
+		return Token(TokenType::Number, retTime);
+	}
 	Token f_split(const std::vector<Token> tokens) {
 		Token saveTo = tokens[0];
 		Token string = tokens[1];
@@ -322,6 +326,7 @@ namespace StdLib
         f("string",  f_string, 1),
         f("int", f_int, 1),
         f("random", f_random, 0),
+		f("time", f_time, 0),
 		f("split", f_split, 3),
     };
 
