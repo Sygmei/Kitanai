@@ -1,0 +1,15 @@
+func "loop" 2 (
+    $"args"$0
+    ?(eq @ ($1@)) (
+    ) (
+        $0[add@1]
+        $"res"$0[mul @ ($"args"$0@)]
+        $"args"
+        loop($0@)($1@)
+    )
+)
+
+func "rec" 1 (
+    $"res"$0[1]
+    loop 1 ($"args"$0@)
+)%
