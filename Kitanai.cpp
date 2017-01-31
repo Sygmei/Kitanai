@@ -238,12 +238,36 @@ void Token::execute(Program* prg)
 				if (_execDebug) std::cout << "[Exe:CurrentStackValue] : Current StackValue (at $" << prg->getStackPosition().first
 					<< "+" << prg->getStackPosition().second << "): " << valueAt.getSummary() << std::endl;
 			}
+			else if (getType() == TokenType::StackSize) {
+				this->type = TokenType::Number;
+				this->value = std::to_string(prg->getStackSize());
+			}
+			else if (getType() == TokenType::StackLeft) {
+				prg->setStackPosition(prg->getStackPosition().second - 1);
+				this->type = TokenType::Null;
+				this->value = "";
+			}
+			else if (getType() == TokenType::StackRight) {
+				prg->setStackPosition(prg->getStackPosition().second + 1);
+				this->type = TokenType::Null;
+				this->value = "";
+			}
+			else if (getType() == TokenType::CurrentStackPosition) {
+				this->type = TokenType::String;
+				this->value = prg->getStackPosition().first;
+			}
+			else if (getType() == TokenType::CurrentSubStackPosition) {
+				this->type = TokenType::Number;
+				this->value = std::to_string(prg->getStackPosition().second);
+			}
 			else if (getType() == TokenType::StackAccess) {
 				if (_execDebug) std::cout << "[Exe:StackAccess] : Store value : "
 					<< getInstructionContent(parametersExecution).getSummary() << " at $"
 					<< prg->getStackPosition().first << "+" << prg->getStackPosition().second << std::endl;
 
 				prg->storeInStack(getInstructionContent(parametersExecution));
+				this->type = TokenType::Null;
+				this->value = "";
 			}
 			else if (getType() == TokenType::Instruction && getValue() != "Ignore") {
 				this->type = getInstructionContent(parametersExecution).getType();
@@ -269,16 +293,24 @@ void Token::execute(Program* prg)
 			else if (getType() == TokenType::GotoNoOrigin) {
 				prg->setSeekedFlag(std::stoi(getInstructionContent(parametersExecution).getValue()));
 				prg->stopExecution(TokenType::Goto);
+				this->type = TokenType::Null;
+				this->value = "";
 			}
 			else if (getType() == TokenType::ToggleExecution) {
 				prg->stopExecution(TokenType::ToggleExecution);
+				this->type = TokenType::Null;
+				this->value = "";
 			}
 			else if (getType() == TokenType::End) {
 				prg->stopProgram();
+				this->type = TokenType::Null;
+				this->value = "";
 			}
 		}
 		else if (getType() == TokenType::ToggleExecution && prg->getPauseCause() == TokenType::ToggleExecution) {
 			prg->startExecution();
+			this->type = TokenType::Null;
+			this->value = "";
 		}
 		else if (TokenType::Flag == this->getType() && prg->getSeekedFlag() == std::stoi(this->getValue()) && prg->getPauseCause() == TokenType::Goto) {
 			if (_execDebug) std::cout << "[Exe:Flag] Flag found : Restarting execution" << std::endl;
@@ -506,6 +538,15 @@ void Program::setStackPosition(std::string pos)
 void Program::setStackPosition(int pos)
 {
 	stackPosition[stackPosition.size() - 1] = std::pair<std::string, int>(stackPosition[stackPosition.size() - 1].first, pos);
+}
+int Program::getStackSize()
+{
+	if (stack.find(stackPosition[stackPosition.size() - 1].first) == stack.end()) {
+		std::cout << "[Error] : Unknown Stack Position : " << stackPosition[stackPosition.size() - 1].first << std::endl;
+	}
+	else {
+		return stack[stackPosition[stackPosition.size() - 1].first].size();
+	}
 }
 Token Program::getStackAt()
 {

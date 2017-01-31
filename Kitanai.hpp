@@ -35,49 +35,61 @@ namespace TokenType
         Goto,
         GotoNoOrigin,
         Origin,
-        NewInstruction,
         End,
         ToggleExecution,
+		StackSize,
+		StackLeft,
+		StackRight,
+		CurrentStackPosition,
+		CurrentSubStackPosition,
         Null
     };
 
-    static std::map<std::string, std::pair<std::string, Type>> TypeDataK = {
-        {"(", {"OpenInstruction", OpenInstruction}},
-        {")", {"CloseInstruction", CloseInstruction}},
-        {"[", {"OpenStackAccess", OpenStackAccess}},
-        {"]", {"CloseStackAccess", CloseStackAccess}},
-        {"?", {"Condition", Condition}},
-        {"$", {"StackAt", StackAt}},
-        {"@", {"CurrentStackValue", CurrentStackValue}},
-        {"#", {"Flag", Flag}},
-        {"&", {"Goto", Goto}},
-        {"*", {"GotoNoOrigin", GotoNoOrigin}},
-        {"~", {"Origin", Origin}},
-        {";", {"NewInstruction", NewInstruction}},
-        {"!", {"ToggleExecution", ToggleExecution}},
+	static std::map<std::string, std::pair<std::string, Type>> TypeDataK = {
+		{"(", {"OpenInstruction", OpenInstruction}},
+		{")", {"CloseInstruction", CloseInstruction}},
+		{"[", {"OpenStackAccess", OpenStackAccess}},
+		{"]", {"CloseStackAccess", CloseStackAccess}},
+		{"?", {"Condition", Condition}},
+		{"$", {"StackAt", StackAt}},
+		{"@", {"CurrentStackValue", CurrentStackValue}},
+		{"#", {"Flag", Flag}},
+		{"&", {"Goto", Goto}},
+		{"*", {"GotoNoOrigin", GotoNoOrigin}},
+		{"~", {"Origin", Origin}},
+		{"!", {"ToggleExecution", ToggleExecution}},
+		{"^", {"StackSize", StackSize}},
+		{"<", {"StackLeft", StackLeft}},
+		{">", {"StackRight", StackRight}},
+		{":", {"CurrentStackPosition", CurrentStackPosition}},
+		{";", {"CurrentSubStackPosition", CurrentSubStackPosition}},
         {"%", {"End", End}}
     };
-    static std::map<Type, std::pair<std::string, std::string>> TypeDataR = {
-        {OpenInstruction, {"OpenInstruction", "("}},
-        {CloseInstruction, {"CloseInstruction", ")"}},
-        {OpenStackAccess, {"OpenStackAccess", "["}},
-        {CloseStackAccess, {"CloseStackAccess", "]"}},
-        {Condition, {"Condition", "?"}},
-        {StackAt, {"StackAt", "$"}},
-        {CurrentStackValue, {"CurrentStackValue", "@"}},
-        {Flag, {"Flag", "#"}},
-        {DynamicFlag, {"DynamicFlag", ""}},
-        {Goto, {"Goto", "&"}},
-        {GotoNoOrigin, {"GotoNoOrigin", "*"}},
-        {Origin, {"Origin", "~"}},
-        {NewInstruction, {"NewInstruction", ";"}},
-        {End, {"End", "%"}},
-        {ToggleExecution, {"ToggleExecution", "!"}},
-        {Function, {"Function", ""}},
-        {String, {"String", ""}},
-        {Number, {"Number", ""}},
-        {Instruction, {"Instruction", ""}},
-        {StackAccess, {"StackAccess", ""}},
+	static std::map<Type, std::pair<std::string, std::string>> TypeDataR = {
+		{OpenInstruction, {"OpenInstruction", "("}},
+		{CloseInstruction, {"CloseInstruction", ")"}},
+		{OpenStackAccess, {"OpenStackAccess", "["}},
+		{CloseStackAccess, {"CloseStackAccess", "]"}},
+		{Condition, {"Condition", "?"}},
+		{StackAt, {"StackAt", "$"}},
+		{CurrentStackValue, {"CurrentStackValue", "@"}},
+		{Flag, {"Flag", "#"}},
+		{DynamicFlag, {"DynamicFlag", ""}},
+		{Goto, {"Goto", "&"}},
+		{GotoNoOrigin, {"GotoNoOrigin", "*"}},
+		{Origin, {"Origin", "~"}},
+		{End, {"End", "%"}},
+		{ToggleExecution, {"ToggleExecution", "!"}},
+		{Function, {"Function", ""}},
+		{String, {"String", ""}},
+		{Number, {"Number", ""}},
+		{Instruction, {"Instruction", ""}},
+		{StackAccess, {"StackAccess", ""}},
+		{StackSize, {"StackSize", "^"}},
+		{StackLeft, {"StackLeft", "<"}},
+		{StackRight, {"StackRight", ">"}},
+		{CurrentStackPosition, {"CurrentStackPosition", ":"}},
+		{CurrentSubStackPosition, {"CurrentSubStackPosition", ";"}},
         {Null, {"Null", ""}}
     };
     static std::vector<std::vector<Type>> TypeParameters = {
@@ -294,6 +306,32 @@ namespace StdLib
 		}
 		return storeInstruction;
 	}
+	Token f_read(const std::vector<Token> tokens) {
+		Token filenameToken = tokens[0];
+		std::string filename = filenameToken.getValue();
+		Token stackPlace = tokens[1];
+		Token storeInstruction(TokenType::Instruction);
+		Token accessMemory = Token(TokenType::StackAt);
+		accessMemory.addParameter(stackPlace);
+		Token zeroPos = Token(TokenType::Number, "0");
+		Token accessSubMem = Token(TokenType::StackAt);
+		accessSubMem.addParameter(zeroPos);
+		storeInstruction.addParameter(accessMemory);
+		storeInstruction.addParameter(accessSubMem);
+		std::ifstream infile(filename);
+		std::string line;
+		while (std::getline(infile, line))
+		{
+			Token stackAcc(TokenType::StackAccess);
+			stackAcc.addParameter(Token(TokenType::String, line));
+			storeInstruction.addParameter(stackAcc);
+			storeInstruction.addParameter(Token(TokenType::StackRight));
+		}
+		return storeInstruction;
+	}
+	Token f_write(const std::vector<Token> tokens) {
+		return Token(TokenType::Null);
+	}
     Token fBuild(std::string funcname, int amount, std::function<Token(const std::vector<Token>)> func, std::vector<Token> parameters) {
         if (amount != parameters.size()) {
             std::cout << "[Error] Number of parameters not correct in function : " << funcname << std::endl;
@@ -308,26 +346,28 @@ namespace StdLib
         std::pair<std::function<Token(const std::vector<Token>)>, int> rpart = fRightPart(name, func, amount);
         return std::pair<std::string, std::pair<std::function<Token(const std::vector<Token>)>, int>>(name, rpart);
     }
-    static std::map<std::string, std::pair<std::function<Token(const std::vector<Token>)>, int>> FunctionsName = {
-        f("add", f_add, 2),
-        f("sub", f_sub, 2),
-        f("mul", f_mul, 2),
-        f("div", f_div, 2),
+	static std::map<std::string, std::pair<std::function<Token(const std::vector<Token>)>, int>> FunctionsName = {
+		f("add", f_add, 2),
+		f("sub", f_sub, 2),
+		f("mul", f_mul, 2),
+		f("div", f_div, 2),
 		f("mod", f_mod, 2),
 		f("not", f_not, 1),
-        f("eq", f_eq, 2),
-        f("neq", f_neq, 2),
-        f("gt", f_gt, 2),
-        f("ge", f_ge, 2),
-        f("lt", f_lt, 2),
-        f("le", f_le, 2),
-        f("print", f_print, 1),
-        f("input", f_input, 1),
-        f("string",  f_string, 1),
-        f("int", f_int, 1),
-        f("random", f_random, 0),
+		f("eq", f_eq, 2),
+		f("neq", f_neq, 2),
+		f("gt", f_gt, 2),
+		f("ge", f_ge, 2),
+		f("lt", f_lt, 2),
+		f("le", f_le, 2),
+		f("print", f_print, 1),
+		f("input", f_input, 1),
+		f("string",  f_string, 1),
+		f("int", f_int, 1),
+		f("random", f_random, 0),
 		f("time", f_time, 0),
 		f("split", f_split, 3),
+		f("read", f_read, 2),
+		f("write", f_write, 2)
     };
 
     static std::map<std::string, Token*> customFunctions = {};
@@ -398,6 +438,7 @@ class Program
 		void setDepth(int depth);
         void setStackPosition(std::string pos);
         void setStackPosition(int pos);
+		int getStackSize();
         Token getStackAt();
         void storeInStack(Token token);
         void stopExecution(TokenType::Type cause);
