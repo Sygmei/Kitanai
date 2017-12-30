@@ -1,0 +1,101 @@
+#include <iostream>
+#include <typeinfo>
+#include <typeindex>
+#include <vector>
+#include <unordered_map>
+
+#include <Node.hpp>
+#include <Token.hpp>
+
+using namespace ktn;
+
+Node toNode(int value)
+{
+    return Node(TokenType::Number, std::to_string(value));
+}
+
+Node toNode(const std::string& value)
+{
+    return Node(TokenType::String, value);
+}
+
+class OverloadedFunction
+{
+private:
+    std::unordered_map<std::type_index, void(*)()> m_overloads;
+public:
+    template <class R, class ...A1>
+    OverloadedFunction& overload(R(*f)(A1...))
+    {
+        std::cout << "TypeId register : " << typeid(R(A1...)).name() << std::endl;
+        m_overloads[typeid(R(A1...))] = (void(*)()) f;
+        return *this;
+    }
+    template <class R, class ...A1>
+    R call(A1... a1) const
+    {
+        std::unordered_map<std::type_index, void(*)()>::const_iterator it = m_overloads.find(typeid(R(A1...)));
+        if (it != m_overloads.end())
+        {
+            R(*f)(A1...) = (R(*)(A1...))(it->second);
+            return (*f)(a1...);
+        }
+    }
+};
+
+class Function
+{
+private:
+    void (*m_function)();
+    unsigned int argc;
+public:
+    template <class R, class ...A1>
+    Function& operator=(R(*f)(A1...))
+    {
+        m_function = (void(*)()) f;
+        argc = sizeof...(A1);
+        return *this;
+    }
+    template <class R, class ...A1>
+    R call(A1... a1) const
+    {
+        R(*f)(A1...) = (R(*)(A1...))(m_function);
+        return (*f)(a1...);
+    }
+    unsigned int argcount()
+    {
+        return argc;
+    }
+};
+
+class FunctionDatabase
+{
+private:
+    std::unordered_map<std::string, Function> m_functions;
+public:
+    template <class R, class ...A1>
+    FunctionDatabase& add(std::string name, R(*f)(A1...))
+    {
+        m_functions[name] = f;
+        return *this;
+    }
+    Function& operator[](const std::string& name)
+    {
+        return m_functions[name];
+    }
+};
+
+int func_add(int a, int b)
+{
+    //std::cout << "Add called with " << a << " and " << b << std::endl;
+    return a + b;
+}
+
+int main()
+{
+    std::cout << func_add(5, 3) << std::endl;
+    FunctionDatabase db;
+    db.add("add", &func_add);
+    std::cout << "Result : " << db["add"].call<int>(5, 7) << std::endl;
+    return 0;
+}

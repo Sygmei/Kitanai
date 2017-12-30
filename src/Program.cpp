@@ -72,7 +72,7 @@ namespace ktn
     {
         origins.push_back(flagNumber);
     }
-    int Program::getNextOrigin()
+    int Program::getNextOrigin() const
     {
         return origins.back();
     }
@@ -91,7 +91,7 @@ namespace ktn
     {
         execution = true;
     }
-    bool Program::canExecute()
+    bool Program::canExecute() const
     {
         return execution;
     }
@@ -99,7 +99,7 @@ namespace ktn
     {
         flagSeeked = flag;
     }
-    int Program::getSeekedFlag()
+    int Program::getSeekedFlag() const
     {
         return flagSeeked;
     }
@@ -115,7 +115,7 @@ namespace ktn
             stackPosition.pop_back();
         }
     }
-    void Program::setStackPosition(std::string pos)
+    void Program::setStackPosition(const std::string& pos)
     {
         stackPosition[stackPosition.size() - 1] = std::pair<std::string, int>(pos, 0);
     }
@@ -123,26 +123,26 @@ namespace ktn
     {
         stackPosition[stackPosition.size() - 1] = std::pair<std::string, int>(stackPosition[stackPosition.size() - 1].first, pos);
     }
-    int Program::getStackSize()
+    int Program::getStackSize() const
     {
         if (stack.find(stackPosition[stackPosition.size() - 1].first) == stack.end()) {
             std::cout << "[Error] : Unknown Stack Position : " << stackPosition[stackPosition.size() - 1].first << std::endl;
         }
         else {
-            return stack[stackPosition[stackPosition.size() - 1].first].size();
+            return stack.at(stackPosition[stackPosition.size() - 1].first).size();
         }
     }
-    Node Program::getStackAt()
+    Node Program::getStackAt() const
     {
         if (stack.find(stackPosition[stackPosition.size() - 1].first) == stack.end()) {
             std::cout << "[Error] : Unknown Stack Position : " << stackPosition[stackPosition.size() - 1].first << std::endl;
         }
-        else if (stack[stackPosition[stackPosition.size() - 1].first].size() < stackPosition[stackPosition.size() - 1].second) {
+        else if (stack.at(stackPosition[stackPosition.size() - 1].first).size() < stackPosition[stackPosition.size() - 1].second) {
             std::cout << "[Error] : Unknown SubStack Position : " << stackPosition[stackPosition.size() - 1].first << "@" << 
                 stackPosition[stackPosition.size() - 1].first << std::endl;
         }
         else {
-            return stack[stackPosition[stackPosition.size() - 1].first][stackPosition[stackPosition.size() - 1].second];
+            return stack.at(stackPosition[stackPosition.size() - 1].first)[stackPosition[stackPosition.size() - 1].second];
         }
     }
     void Program::storeInStack(Node token)
@@ -152,7 +152,7 @@ namespace ktn
         }
         stack[stackPosition[stackPosition.size() - 1].first][stackPosition[stackPosition.size() - 1].second] = token;
     }
-    void Program::parseFile(std::string path)
+    void Program::parseFile(const std::string& path)
     {
         if (compDebug) std::cout << "[Compilation] Start file parsing..." << std::endl;
         std::ifstream useFile;
@@ -165,9 +165,6 @@ namespace ktn
                 if (currentLine != "") {
                     if (compDebug) std::cout << "[Compilation:Parsing] Current line : " << currentLine << std::endl;
                     ExtractionResult cuttedString = extractStrings(currentLine);
-                    for (std::string staticStr : std::get<0>(cuttedString)) {
-                        staticStrings.push_back(staticStr);
-                    }
                     for (std::pair<int, int> parseInst : std::get<2>(cuttedString)) {
                         if (parseInst.first == 0) {
                             Node newToken(TokenType::String, std::get<0>(cuttedString)[parseInst.second]);
@@ -276,7 +273,7 @@ namespace ktn
             instructions.execute(this);
         }
     }
-    void Program::import(std::string path)
+    void Program::import(const std::string& path)
     {
         for (int i = 0; i < 2; i++) {
             this->parseFile(path);
@@ -290,7 +287,7 @@ namespace ktn
     {
         return instructions;
     }
-    std::pair<std::string, int> Program::getStackPosition()
+    std::pair<std::string, int> Program::getStackPosition() const
     {
         return stackPosition[stackPosition.size() - 1];
     }
@@ -299,7 +296,7 @@ namespace ktn
         execution = false;
         isProgramOver = true;
     }
-    TokenType Program::getPauseCause()
+    TokenType Program::getPauseCause() const
     {
         return pauseCause;
     }

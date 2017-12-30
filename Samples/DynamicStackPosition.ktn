@@ -2,6 +2,9 @@ $"coucou"$3
 ["Success !"]
 $"nothere"$1
 ["Failed !"]
+$"reset"$0
+$(add "not" "here")
+$(sub 101 100)
 print @
 $(add "cou" "cou")
 $(sub 5 2)

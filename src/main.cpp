@@ -34,7 +34,6 @@ int main(int argc, char** argv)
 	}
 
 	if (prog.compDebug) std::cout << "Execution over.." << std::endl;
-	std::cin.get();
 
     return 0;
 }

@@ -25,16 +25,17 @@ namespace ktn
         this->value = value;
         this->id = NodeAmount++;
     }
+    
     void Node::setParent(Node* parent)
     {
         this->parent = parent;
         this->parentID = this->parent->getID();
     }
-    int Node::getID()
+    int Node::getID() const
     {
         return this->id;
     }
-    std::string Node::getSummary()
+    std::string Node::getSummary() const
     {
         std::ostringstream address;
         address << (void const *)this;
@@ -42,11 +43,11 @@ namespace ktn
             + ((this->getValue() != "") ? " (" + this->value + ")" : "") +
             ((_dispMemAd) ? std::string(" @") + address.str() : std::string()) + "]";
     }
-    TokenType Node::getType() 
+    TokenType Node::getType() const
     {
         return this->type;
     }
-    std::string Node::getPrintableType()
+    std::string Node::getPrintableType() const
     {
         return Token::FindByType(this->type).name;
     }
@@ -54,7 +55,7 @@ namespace ktn
     {
         this->type = type;
     }
-    std::string Node::getValue()
+    std::string Node::getValue() const
     {
         return this->value;
     }
@@ -77,11 +78,11 @@ namespace ktn
             }
         }
     }
-    Node* Node::getParent()
+    Node* Node::getParent() const
     {
         return this->parent;
     }
-    int Node::getParentID()
+    int Node::getParentID() const
     {
         return this->parentID;
     }
@@ -283,7 +284,7 @@ namespace ktn
             }
         }
     }
-    int Node::getDepth()
+    int Node::getDepth() const
     {
         int depth = 0;
         Node* tParent = getParent();
